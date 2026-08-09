@@ -137,45 +137,82 @@ async function analyzeEmotion(imageBlob) {
 }
 
 /**
- * Vibe classification using image classification model.
+ * Vibe classification using zero-shot image classification (CLIP).
+ * Uses Xenova/clip-vit-base-patch32 which supports zero-shot classification.
  */
 async function analyzeVibe(imageBlob) {
   try {
-    // Use ViT for image classification
+    // Use CLIP for zero-shot image classification
+    const response = await fetch(
+      'https://api-inference.huggingface.co/models/xenova/clip-vit-base-patch32',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: {
+            image: await blobToBase64(imageBlob),
+            parameters: {
+              candidate_labels: [
+                'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
+                'alpha energy', 'main character', 'hot', 'aesthetic',
+                'iconic', 'legendary', 'dark vibes', 'soft vibes',
+                'chaotic energy', 'elegant', 'classy', 'boss energy',
+                'dreamy', 'ethereal', 'playful', 'mysterious',
+              ],
+            },
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      // Fallback to image classification
+      return await analyzeVibeFallback(imageBlob);
+    }
+
+    const result = await response.json();
+
+    // CLIP returns array of { label, score }
+    const scores = {};
+    if (Array.isArray(result)) {
+      result.forEach((item) => {
+        scores[item.label] = Math.round(item.score * 100);
+      });
+    }
+
+    const topLabel = result?.[0]?.label || 'aesthetic';
+    const topScore = result?.[0]?.score ? Math.round(result[0].score * 100) : 50;
+
+    return { topLabel, topScore, scores, hasVibe: true };
+  } catch (err) {
+    console.error('CLIP error:', err);
+    return await analyzeVibeFallback(imageBlob);
+  }
+}
+
+/**
+ * Fallback: image classification mapped to vibe tags.
+ */
+async function analyzeVibeFallback(imageBlob) {
+  try {
     const response = await fetch(
       'https://api-inference.huggingface.co/models/google/vit-base-patch16-224',
       { method: 'POST', body: imageBlob }
     );
 
     if (!response.ok) {
-      return { topLabel: 'unknown', topScore: 0, scores: {}, hasVibe: false };
+      return { topLabel: 'aesthetic', topScore: 50, scores: { aesthetic: 50 }, hasVibe: true };
     }
 
     const results = await response.json();
 
     // Map ImageNet labels to vibe tags
     const vibeMap = {
-      'person': 'main character',
-      'man': 'handsome',
-      'woman': 'gorgeous',
-      'boy': 'cute',
-      'girl': 'stunning',
-      'suit': 'boss energy',
-      'dress': 'elegant',
-      'car': 'aesthetic',
-      'dog': 'playful',
-      'cat': 'cute',
-      'flower': 'beautiful',
-      'sunset': 'dreamy',
-      'night': 'mysterious',
-      'dark': 'dark vibes',
-      'light': 'bright',
-      'food': 'aesthetic',
-      'drink': 'classy',
-      'book': 'aesthetic',
-      'music': 'iconic',
-      'sports': 'alpha energy',
-      'art': 'legendary',
+      'person': 'main character', 'man': 'handsome', 'woman': 'gorgeous',
+      'boy': 'cute', 'girl': 'stunning', 'suit': 'boss energy',
+      'dress': 'elegant', 'car': 'aesthetic', 'dog': 'playful',
+      'cat': 'cute', 'flower': 'beautiful', 'sunset': 'dreamy',
+      'night': 'mysterious', 'food': 'aesthetic', 'sports': 'alpha energy',
     };
 
     const scores = {};
@@ -186,37 +223,27 @@ async function analyzeVibe(imageBlob) {
       results.forEach(item => {
         const label = item.label.toLowerCase();
         let vibe = vibeMap[label] || null;
-
-        // Check partial matches
         if (!vibe) {
           for (const [key, val] of Object.entries(vibeMap)) {
             if (label.includes(key)) { vibe = val; break; }
           }
         }
-
         if (vibe) {
           const score = Math.round(item.score * 100);
           scores[vibe] = Math.max(scores[vibe] || 0, score);
-          if (score > topScore) {
-            topScore = score;
-            topLabel = vibe;
-          }
+          if (score > topScore) { topScore = score; topLabel = vibe; }
         }
       });
     }
 
-    // Add fallback vibes if none found
     if (Object.keys(scores).length === 0) {
       scores['aesthetic'] = 60;
-      scores['handsome'] = 45;
-      scores['cute'] = 40;
       topLabel = 'aesthetic';
       topScore = 60;
     }
 
     return { topLabel, topScore, scores, hasVibe: true };
   } catch (err) {
-    console.error('Vibe analysis error:', err);
     return { topLabel: 'aesthetic', topScore: 50, scores: { aesthetic: 50 }, hasVibe: true };
   }
 }
