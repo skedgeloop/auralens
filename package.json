@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@tensorflow-models/body-segmentation": "^1.0.2",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.10.0",
     "@tensorflow/tfjs-converter": "^4.10.0",
+    "@vladmandic/face-api": "^1.7.15",
     "next": "13.4.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
