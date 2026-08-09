@@ -1,6 +1,6 @@
 /**
- * AuraLens AI Worker — server-side AI analysis.
- * Uses Hugging Face Inference API with correct model endpoints.
+ * AuraLens AI — Cloudflare Pages Function (runs at auralens.pages.dev/api/ai).
+ * Same logic as the old standalone worker, served from the Pages site itself.
  */
 
 const CORS_HEADERS = {
@@ -23,74 +23,65 @@ function checkRateLimit(ip) {
   return record.count <= RATE_LIMIT;
 }
 
-export default {
-  async fetch(request, env) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS_HEADERS });
-    }
+export const onRequestOptions = async () => {
+  return new Response(null, { headers: CORS_HEADERS });
+};
 
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'POST only' }), {
-        status: 405,
+export const onRequestPost = async ({ request, env }) => {
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  if (!checkRateLimit(ip)) {
+    return new Response(JSON.stringify({ error: 'Rate limited' }), {
+      status: 429,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const { image } = await request.json();
+    if (!image) {
+      return new Response(JSON.stringify({ error: 'No image' }), {
+        status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
 
-    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    if (!checkRateLimit(ip)) {
-      return new Response(JSON.stringify({ error: 'Rate limited' }), {
-        status: 429,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+    const imageBlob = base64ToBlob(image);
+
+    // Run all analyses in parallel
+    const [emotionResult, vibeResult, objectResult] = await Promise.allSettled([
+      analyzeEmotion(imageBlob, env),
+      analyzeVibe(imageBlob, env),
+      analyzeObjects(imageBlob),
+    ]);
+
+    const emotion = emotionResult.status === 'fulfilled' ? emotionResult.value : null;
+    const vibe = vibeResult.status === 'fulfilled' ? vibeResult.value : null;
+    const objects = objectResult.status === 'fulfilled' ? objectResult.value : null;
+
+    // DETR found a real person/face but CLIP read no expression —
+    // merge the person's box in so the client still knows where the face is.
+    const person = objects?.persons?.[0];
+    if (person && emotion && !emotion.faceBox) {
+      emotion.faceBox = person.faceBox;
+      emotion.confidence = person.confidence;
+      emotion.faceCount = Math.max(emotion.faceCount, objects.persons.length);
+      emotion.hasFace = emotion.hasFace || true;
     }
 
-    try {
-      const { image } = await request.json();
-      if (!image) {
-        return new Response(JSON.stringify({ error: 'No image' }), {
-          status: 400,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const imageBlob = base64ToBlob(image);
-
-      // Run all analyses in parallel
-      const [emotionResult, vibeResult, objectResult] = await Promise.allSettled([
-        analyzeEmotion(imageBlob, env),
-        analyzeVibe(imageBlob, env),
-        analyzeObjects(imageBlob),
-      ]);
-
-      const emotion = emotionResult.status === 'fulfilled' ? emotionResult.value : null;
-      const vibe = vibeResult.status === 'fulfilled' ? vibeResult.value : null;
-      const objects = objectResult.status === 'fulfilled' ? objectResult.value : null;
-
-      // DETR found a real person/face but CLIP read no expression —
-      // merge the person's box in so the client still knows where the face is.
-      const person = objects?.persons?.[0];
-      if (person && emotion && !emotion.faceBox) {
-        emotion.faceBox = person.faceBox;
-        emotion.confidence = person.confidence;
-        emotion.faceCount = Math.max(emotion.faceCount, objects.persons.length);
-        emotion.hasFace = emotion.hasFace || true;
-      }
-
-      return new Response(JSON.stringify({
-        emotion,
-        vibe,
-        objects,
-        timestamp: Date.now(),
-      }), {
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
-        status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-  },
+    return new Response(JSON.stringify({
+      emotion,
+      vibe,
+      objects,
+      timestamp: Date.now(),
+    }), {
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  }
 };
 
 /**

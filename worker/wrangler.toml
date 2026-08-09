@@ -1,7 +1,0 @@
-name = "auralens-ai"
-main = "worker.js"
-compatibility_date = "2024-11-01"
-
-# Workers AI binding (auto-provisioned) — fallback for vibe + emotion when
-# Hugging Face inference is unreachable from the CF edge (DNS 1016).
-ai = { binding = "AI" }

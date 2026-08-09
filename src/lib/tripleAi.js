@@ -3,7 +3,7 @@
  * Shows ALL model results, not just the first that works.
  */
 
-const WORKER_URL = 'https://auralens-ai.skedgeloop.workers.dev';
+const WORKER_URL = '/api/ai'; // same-origin Pages Function at auralens.pages.dev/api/ai
 
 export const runTripleAnalysis = async (imageSrc) => {
   const results = {
