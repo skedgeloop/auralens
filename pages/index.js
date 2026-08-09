@@ -248,6 +248,17 @@ export default function Home() {
     }
   }, [showToast]);
 
+  // Auto-load the first sample into the editor on first visit (old behavior:
+  // the app opened straight into the editor with the AI popup visible).
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (didAutoLoad.current) return;
+    didAutoLoad.current = true;
+    const first = SAMPLES[0];
+    if (first) handleSampleSelect(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Pre-analyze samples once on landing: server results (KV-cached) + auto-fixed "after".
   // The auto-fixed thumbnails are SAVED in KV so they never recompute per visit.
   useEffect(() => {
