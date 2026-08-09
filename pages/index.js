@@ -20,6 +20,7 @@ import {
 } from '../src/lib/imageFilters';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
+import SAMPLES from '../src/lib/samples';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 
@@ -173,6 +174,64 @@ export default function Home() {
     setEditSuggestions([]);
   }, []);
 
+  // ---- Sample: load a curated photo + server-analyze (KV-cached) ----
+  const handleSampleSelect = useCallback(async (sample) => {
+    const zero = { brightness: 0, contrast: 0, saturation: 0, temperature: 0, hue: 0, sharpness: 0, exposure: 0 };
+    setOriginalImage(sample.src);
+    setEditHistory([]);
+    setHistoryIndex(-1);
+    setEditSuggestions([]);
+    setActiveFilter('none');
+    setFilterIntensity(100);
+    setAdjustments(zero);
+    setZoom(1);
+    setIsComparing(true); // show before/after at 50%
+    setDisplayedImage(sample.src);
+    setActiveTab('ai');
+    setShowAiPanel(true);
+    setAiAnalysisReady(false);
+
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sample: sample.name, src: sample.src }),
+      });
+      const data = await res.json();
+      if (data && !data.error) {
+        const vibe = data.vibe || { hasVibe: false };
+        setTripleAi({
+          models: [],
+          face: data.emotion || { hasFace: false, emotions: {}, faceCount: 0 },
+          vibe,
+          objects: data.objects || { objects: [], hasObjects: false },
+          tier: 'server',
+          summary: vibe.hasVibe ? `aura: ${vibe.topLabel} · cloud ai` : 'cloud ai',
+          cached: !!data.cached,
+        });
+        setAiTier('server');
+        if (data.cached) showToast('analyzed before — instant', 'success');
+      }
+      // Client pixel analysis for edit suggestions
+      const analysisResult = await analyzeImage(sample.src);
+      if (analysisResult) {
+        setAiAnalysis(analysisResult);
+        const suggestions = analysisResult.suggestions || [];
+        setEditSuggestions(suggestions.map(s => ({
+          text: s.reason,
+          filter: s.action?.name || s.action,
+          reason: `Confidence: ${Math.round((s.confidence || 0.5) * 100)}%`,
+        })));
+      }
+    } catch (err) {
+      console.error('Sample AI error:', err);
+    } finally {
+      setIsAnalyzing(false);
+      setAiAnalysisReady(true);
+    }
+  }, [showToast]);
+
   // ---- Filters ----
   const handleFilterSelect = useCallback(async (filterName) => {
     if (!currentImage) return;
@@ -294,35 +353,76 @@ export default function Home() {
 
       {/* ===== Main content ===== */}
       {!hasImage ? (
-        /* ===== Landing page ===== */
-        <div className="flex-1 flex items-center justify-center px-6 py-10 bg-[var(--bg)]">
-          <div className="w-full max-w-2xl">
+        /* ===== Premium landing page ===== */
+        <div className="flex-1 overflow-y-auto bg-[var(--bg)]">
+          <div className="w-full max-w-3xl mx-auto px-6 py-12 md:py-16">
             {/* Header */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--text-dim)] mb-4">
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-soft)] bg-[var(--pink-glow)] px-4 py-1.5 text-xs text-[var(--pink-dim)] mb-6">
                 <FiStar className="w-3 h-3 text-pink" />
                 no account · no cloud · just vibes
               </div>
-              <h1 className="font-display text-5xl md:text-6xl font-bold tracking-tight mb-3">
+              <h1 className="type-display mb-5">
                 your photos,<br />
                 <span className="text-pink">but make it iconic.</span>
               </h1>
-              <p className="text-[var(--text-dim)] text-sm md:text-base max-w-md mx-auto">
+              <p className="type-body text-[var(--text-dim)] max-w-md mx-auto">
                 drop a pic. AI detects what's in it, slaps on the right edits, and hands you the wheel. or just let it cook.
               </p>
             </div>
 
+            {/* Drop section — on top */}
             <UploadArea onImageUpload={handleImageUpload} />
 
+            {/* Try now — sample gallery */}
+            <div className="mt-12">
+              <div className="text-center mb-5">
+                <p className="type-caption mb-1">try now</p>
+                <h2 className="type-h3 text-white">pick a sample, watch it get cooked</h2>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {SAMPLES.map((s) => (
+                  <button
+                    key={s.name}
+                    onClick={() => handleSampleSelect(s)}
+                    className="group relative aspect-[4/5] rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] transition-all hover:border-[var(--pink)]/50 hover:shadow-[0_8px_40px_-12px_var(--pink)]"
+                  >
+                    <img
+                      src={s.src}
+                      alt={s.hint}
+                      loading="lazy"
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
+                      <span className="text-xs font-bold text-white">{s.hint}</span>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="px-3 py-1.5 rounded-full bg-[var(--pink)] text-black text-xs font-bold shadow-lg">analyze →</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Features */}
-            <div className="mt-8 grid grid-cols-3 gap-3">
+            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-3">
               {FEATURES.map((f) => (
-                <div key={f.title} className="panel panel-hover p-4 text-center rounded-xl">
-                  <f.icon className="w-5 h-5 mx-auto mb-2 text-[var(--accent)]" />
-                  <p className="text-xs font-semibold text-white">{f.title}</p>
-                  <p className="text-[11px] text-[var(--text-dim)] mt-1">{f.desc}</p>
+                <div key={f.title} className="panel panel-hover p-5 text-center rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-[var(--pink-glow)] border border-[var(--border-soft)] flex items-center justify-center mx-auto mb-3">
+                    <f.icon className="w-5 h-5 text-pink" />
+                  </div>
+                  <p className="type-h3 text-white mb-1">{f.title}</p>
+                  <p className="type-caption text-[var(--text-dim)] normal-case tracking-normal text-[11px]">{f.desc}</p>
                 </div>
               ))}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-12 text-center text-[11px] text-[var(--text-faint)]">
+              <p className="font-display font-bold text-white text-sm mb-1">aura</p>
+              <p>your photos stay on your device · no signup · no tracking</p>
             </div>
           </div>
         </div>
@@ -369,8 +469,8 @@ export default function Home() {
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${
-                                  aiTier === 'server' ? 'bg-emerald-400' :
-                                  aiTier === 'browser' ? 'bg-amber-400' : 'bg-gray-400'
+                                  aiTier === 'server' ? 'bg-pink' :
+                                  aiTier === 'browser' ? 'bg-pink-dim' : 'bg-[var(--text-faint)]'
                                 }`} />
                                 <span className="text-[9px] text-white/50 uppercase tracking-wider font-bold">
                                   {aiTier === 'server' ? 'cloud ai' : aiTier === 'browser' ? 'browser ai' : 'pixel'}
@@ -406,11 +506,11 @@ export default function Home() {
                               <div>
                                 <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">emotions</p>
                                 {[
-                                  { key: 'happiness', label: '😊 happy', color: '#22c55e' },
-                                  { key: 'sadness', label: '😢 sad', color: '#3b82f6' },
-                                  { key: 'anger', label: '😠 angry', color: '#ef4444' },
-                                  { key: 'surprise', label: '😲 surprise', color: '#f59e0b' },
-                                  { key: 'neutral', label: '😐 neutral', color: '#6b7280' },
+                                  { key: 'happiness', label: '😊 happy', color: '#ff6b9d' },
+                                  { key: 'sadness', label: '😢 sad', color: '#ffa9c4' },
+                                  { key: 'anger', label: '😠 angry', color: '#ff2d6f' },
+                                  { key: 'surprise', label: '😲 surprise', color: '#ff8fb5' },
+                                  { key: 'neutral', label: '😐 neutral', color: '#d81b57' },
                                   { key: 'sassiness', label: '💅 sassy', color: '#ff2d6f' },
                                 ].map(({ key, label, color }) => {
                                   const val = tripleAi.face?.emotions?.[key] || 0;
@@ -468,7 +568,7 @@ export default function Home() {
                                   <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">models</p>
                                   {tripleAi.models.map((m, i) => (
                                     <div key={i} className="flex items-center gap-1.5 mb-0.5">
-                                      <span className={`w-1 h-1 rounded-full ${m.status === 'ok' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                      <span className={`w-1 h-1 rounded-full ${m.status === 'ok' ? 'bg-pink' : 'bg-[var(--text-faint)]'}`} />
                                       <span className="text-[8px] text-white/50 w-16 shrink-0">{m.name}</span>
                                       <span className="text-[8px] text-white/70 truncate">{m.detail}</span>
                                     </div>
