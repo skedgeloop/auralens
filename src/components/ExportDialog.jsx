@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiX, FiDownload } from 'react-icons/fi';
+import { FiX, FiDownload, FiShare2 } from 'react-icons/fi';
 
 const FORMATS = [
   { key: 'png', label: 'PNG', desc: 'lossless, big file' },
@@ -7,9 +7,28 @@ const FORMATS = [
   { key: 'webp', label: 'WebP', desc: 'modern, best of both' },
 ];
 
-export default function ExportDialog({ isOpen, onClose, onExport, imageWidth, imageHeight }) {
+export default function ExportDialog({ isOpen, onClose, onExport, imageSrc, imageWidth, imageHeight }) {
   const [format, setFormat] = useState('png');
   const [quality, setQuality] = useState(92);
+
+  const handleShare = async () => {
+    if (!imageSrc) return;
+    try {
+      if (navigator.share) {
+        // Convert data URL to a File for sharing
+        const res = await fetch(imageSrc);
+        const blob = await res.blob();
+        const file = new File([blob], `auralens.${format}`, { type: blob.type || 'image/png' });
+        await navigator.share({ title: 'aura', text: 'made with aura', files: [file] });
+      } else {
+        // Fallback: copy the image to clipboard
+        await navigator.clipboard.writeText(imageSrc);
+        alert('Image data copied — paste to share');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error('Share failed:', err);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -76,6 +95,9 @@ export default function ExportDialog({ isOpen, onClose, onExport, imageWidth, im
 
         <button onClick={() => onExport({ format, quality: quality / 100 })} className="btn btn-pink w-full">
           <FiDownload className="w-4 h-4" /> export {format.toUpperCase()}
+        </button>
+        <button onClick={handleShare} className="btn btn-dark w-full mt-2">
+          <FiShare2 className="w-4 h-4" /> share
         </button>
       </div>
     </div>

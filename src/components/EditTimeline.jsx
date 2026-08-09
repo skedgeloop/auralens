@@ -13,6 +13,8 @@ export default function EditTimeline({ past, future, currentIndex }) {
     if (edit.type === 'filter') return edit.name || 'Filter';
     if (edit.type === 'adjust') return 'Adjust';
     if (edit.type === 'rotate') return edit.direction === 'cw' ? 'Rot →' : 'Rot ←';
+    if (edit.type === 'smart-enhance' || /smart enhance/i.test(edit.description || '')) return '✨ Smart';
+    if (edit.type === 'gradient' || /color grade/i.test(edit.description || '')) return '🎨 Grade';
     return 'Edit';
   };
 

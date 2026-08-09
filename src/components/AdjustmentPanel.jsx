@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FiRotateCcw } from 'react-icons/fi';
+import { FiRotateCcw, FiCheck } from 'react-icons/fi';
 
 const ADJUSTMENTS = [
   { key: 'brightness', label: 'Brightness', min: -100, max: 100, default: 0 },
@@ -11,12 +11,23 @@ const ADJUSTMENTS = [
   { key: 'exposure', label: 'Exposure', min: -100, max: 100, default: 0 },
 ];
 
-export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAll }) {
+const RGB_CHANNELS = [
+  { key: 'r', label: 'Red', default: 100 },
+  { key: 'g', label: 'Green', default: 100 },
+  { key: 'b', label: 'Blue', default: 100 },
+];
+
+export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAll, onApplyGradient, previewImage }) {
   const [local, setLocal] = useState(() => {
     const init = {};
     ADJUSTMENTS.forEach((a) => { init[a.key] = a.default; });
     return init;
   });
+  const [rgb, setRgb] = useState({ r: 100, g: 100, b: 100 });
+  const [shadowColor, setShadowColor] = useState('#00a8ff');
+  const [highlightColor, setHighlightColor] = useState('#ff7a2d');
+  const [gradeTemp, setGradeTemp] = useState(0);
+  const [gradeVib, setGradeVib] = useState(0);
 
   const handleChange = useCallback((key, value) => {
     const num = Number(value);
@@ -29,6 +40,18 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
     setLocal((prev) => ({ ...prev, [key]: def }));
     onAdjust(key, def);
   }, [onAdjust]);
+
+  const handleApplyGrade = useCallback(() => {
+    onApplyGradient?.({
+      rgb,
+      gradient: [
+        { pos: 0, color: shadowColor },
+        { pos: 1, color: highlightColor },
+      ],
+      temperature: gradeTemp,
+      vibrance: gradeVib,
+    });
+  }, [onApplyGradient, rgb, shadowColor, highlightColor, gradeTemp, gradeVib]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -89,6 +112,70 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
           </div>
         );
       })}
+
+      {/* === COLOR / GRADIENT === */}
+      <div className="border-t border-[var(--border)] pt-3">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-dim)]">
+          color · gradient
+        </span>
+
+        {/* RGB channel gain */}
+        {RGB_CHANNELS.map((ch) => (
+          <div key={ch.key} className="group mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-[var(--text-dim)] group-hover:text-white font-medium">{ch.label}</span>
+              <span className="text-[11px] text-[var(--text-dim)] tabular-nums w-7 text-right font-mono">{rgb[ch.key]}</span>
+            </div>
+            <input
+              type="range" min={0} max={200} value={rgb[ch.key]}
+              onChange={(e) => setRgb((p) => ({ ...p, [ch.key]: Number(e.target.value) }))}
+              className="slider"
+              style={{
+                background: `linear-gradient(to right, ${ch.key === 'r' ? '#ff4d6d' : ch.key === 'g' ? '#4dff88' : '#4d8dff'} 0%, ${ch.key === 'r' ? '#ff4d6d' : ch.key === 'g' ? '#4dff88' : '#4d8dff'} ${((rgb[ch.key] - 0) / 200) * 100}%, #222 ${((rgb[ch.key] - 0) / 200) * 100}%)`,
+              }}
+            />
+          </div>
+        ))}
+
+        {/* Gradient stops — split tone */}
+        <div className="mt-4 flex items-center gap-3">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-[var(--text-dim)]">shadows</span>
+              <input type="color" value={shadowColor} onChange={(e) => setShadowColor(e.target.value)}
+                className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-dim)]">highlights</span>
+              <input type="color" value={highlightColor} onChange={(e) => setHighlightColor(e.target.value)}
+                className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
+            </div>
+          </div>
+          {/* live gradient preview */}
+          <div className="w-14 h-12 rounded-md border border-[var(--border)]"
+            style={{ background: `linear-gradient(to bottom, ${highlightColor}, ${shadowColor})` }} />
+        </div>
+
+        {/* temperature + vibrance */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] text-[var(--text-dim)]">temperature</span>
+            <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeTemp}</span>
+          </div>
+          <input type="range" min={-100} max={100} value={gradeTemp} onChange={(e) => setGradeTemp(Number(e.target.value))} className="slider" />
+        </div>
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] text-[var(--text-dim)]">vibrance</span>
+            <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeVib}</span>
+          </div>
+          <input type="range" min={-100} max={100} value={gradeVib} onChange={(e) => setGradeVib(Number(e.target.value))} className="slider" />
+        </div>
+
+        <button onClick={handleApplyGrade} className="btn btn-pink w-full mt-4 py-2.5 text-xs">
+          <FiCheck className="w-3.5 h-3.5" /> apply grade
+        </button>
+      </div>
     </div>
   );
 }

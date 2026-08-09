@@ -20,6 +20,7 @@ import {
 } from '../src/lib/imageFilters';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
+import { applyColorGrade, smartAutoEnhance } from '../src/lib/realAi';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 
@@ -68,6 +69,7 @@ export default function Home() {
   const [showExport, setShowExport] = useState(false);
   const [toast, setToast] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [applying, setApplying] = useState(false);
 
   // The "current" edited image (after filter, before adjustments)
   const currentImage = historyIndex >= 0 ? editHistory[historyIndex]?.image : originalImage;
@@ -161,9 +163,29 @@ export default function Home() {
       } finally {
         setIsAnalyzing(false);
         setAiAnalysisReady(true);
+        // Auto-apply the recommended smart-enhance after analysis (or ~5s)
+        autoApplyEnhance(dataUrl);
       }
     })();
   }, [showToast]);
+
+  // ---- Auto-apply smart enhance after analysis (once per upload) ----
+  const autoApplyEnhance = useCallback(async (src) => {
+    // Show a brief "applying recommended changes" state
+    setApplying(true);
+    try {
+      const enhanced = await smartAutoEnhance(src);
+      if (enhanced && enhanced !== src) {
+        // Push as a revertable step so the user can undo it
+        setEditHistory((prev) => {
+          const trimmed = prev.slice(0, historyIndex + 1);
+          return [...trimmed, { image: enhanced, description: 'Smart enhance' }];
+        });
+        setHistoryIndex((prev) => prev + 1);
+      }
+    } catch (err) { console.error('Auto-enhance failed:', err); }
+    finally { setApplying(false); }
+  }, [historyIndex]);
 
   const handleNewImage = useCallback(() => {
     setOriginalImage(null);
@@ -205,6 +227,16 @@ export default function Home() {
   const handleAdjustResetAll = useCallback(() => {
     setAdjustments({ brightness: 0, contrast: 0, saturation: 0, temperature: 0, hue: 0, sharpness: 0, exposure: 0 });
   }, []);
+
+  // ---- Color grade (RGB + gradient) — commits as a revertable step ----
+  const handleApplyGradient = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      const graded = await applyColorGrade(currentImage, opts);
+      pushSnapshot(graded, 'Color grade');
+      showToast('Color grade applied', 'success');
+    } catch (err) { console.error('Gradient failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
 
   // ---- Transform ----
   const handleRotate = useCallback(async (degrees) => {
@@ -314,6 +346,11 @@ export default function Home() {
 
             <UploadArea onImageUpload={handleImageUpload} />
 
+            {/* Post-edit journey — makes what happens after visible */}
+            <p className="text-center mt-4 text-xs text-[var(--text-dim)]">
+              edit → <span className="text-[var(--pink)] font-semibold">download or share</span> in one tap
+            </p>
+
             {/* Features */}
             <div className="mt-8 grid grid-cols-3 gap-3">
               {FEATURES.map((f) => (
@@ -357,6 +394,15 @@ export default function Home() {
                       isComparing={isComparing}
                     />
 
+                    {/* Applying recommended changes overlay */}
+                    {applying && (
+                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/50 backdrop-blur-sm">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-2 border-white/20 border-t-[var(--pink)] rounded-full animate-spin" />
+                          <p className="text-sm text-white/90 font-medium">applying recommended changes…</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Floating AI panel — left side */}
                     {tripleAi && showAiPanel && (
@@ -529,6 +575,8 @@ export default function Home() {
                   onAdjust={handleAdjust}
                   activeAdjustments={adjustments}
                   onResetAll={handleAdjustResetAll}
+                  onApplyGradient={handleApplyGradient}
+                  previewImage={currentImage}
                 />
               )}
 
@@ -601,6 +649,7 @@ export default function Home() {
         isOpen={showExport}
         onClose={() => setShowExport(false)}
         onExport={handleExport}
+        imageSrc={displayedImage}
         imageWidth={imageDimensions.width}
         imageHeight={imageDimensions.height}
       />
