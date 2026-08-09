@@ -1,11 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
-/**
- * Before/After comparison slider over the image.
- * Drag the handle to reveal original (left) vs edited (right).
- */
-export default function ComparisonSlider({ originalSrc, editedSrc, isComparing, onToggle }) {
+export default function ComparisonSlider({ originalSrc, editedSrc, isComparing }) {
   const containerRef = useRef(null);
   const [position, setPosition] = useState(50);
   const dragging = useRef(false);
@@ -28,9 +24,7 @@ export default function ComparisonSlider({ originalSrc, editedSrc, isComparing, 
     updatePosition(e.clientX);
   }, [updatePosition]);
 
-  const handleMouseUp = useCallback(() => {
-    dragging.current = false;
-  }, []);
+  const handleMouseUp = useCallback(() => { dragging.current = false; }, []);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -46,42 +40,30 @@ export default function ComparisonSlider({ originalSrc, editedSrc, isComparing, 
   return (
     <div
       ref={containerRef}
-      className="comparison-container absolute inset-0 z-20"
+      className="absolute inset-0 z-20 cursor-ew-resize select-none"
       onMouseDown={handleMouseDown}
     >
-      {/* Edited (right side, full width underneath) */}
-      <img src={editedSrc} alt="Edited" className="absolute inset-0 w-full h-full object-contain" />
-
-      {/* Original (left side, clipped) */}
-      <div
-        className="absolute inset-0 overflow-hidden"
-        style={{ width: `${position}%` }}
-      >
+      <img src={editedSrc} alt="" className="absolute inset-0 w-full h-full object-contain" />
+      <div className="absolute inset-0 overflow-hidden" style={{ width: `${position}%` }}>
         <img
-          src={originalSrc}
-          alt="Original"
+          src={originalSrc} alt=""
           className="absolute inset-0 w-full h-full object-contain"
           style={{ width: containerRef.current ? containerRef.current.offsetWidth : '100%' }}
         />
       </div>
-
-      {/* Divider line */}
-      <div className="comparison-line" style={{ left: `${position}%` }} />
-
-      {/* Handle */}
-      <div className="comparison-handle" style={{ left: `${position}%` }}>
-        <div className="flex items-center gap-0">
-          <FiChevronLeft className="w-3 h-3 text-gray-800" />
-          <FiChevronRight className="w-3 h-3 text-gray-800" />
-        </div>
+      <div className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg" style={{ left: `${position}%` }} />
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-lg"
+        style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
+      >
+        <FiChevronLeft className="w-3 h-3 text-black" />
+        <FiChevronRight className="w-3 h-3 text-black" />
       </div>
-
-      {/* Labels */}
-      <div className="comparison-label left-4 bg-black/60 text-white backdrop-blur-sm">
-        Original
+      <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold text-white uppercase tracking-wider">
+        before
       </div>
-      <div className="comparison-label right-4 bg-white/90 text-gray-900">
-        Edited
+      <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-[var(--pink)] text-[10px] font-bold text-black uppercase tracking-wider">
+        after
       </div>
     </div>
   );

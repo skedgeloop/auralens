@@ -1,17 +1,12 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FiRotateCcw } from 'react-icons/fi';
-
-/**
- * Image adjustment sliders panel.
- * Changes are computed as canvas pixel operations on the fly.
- */
 
 const ADJUSTMENTS = [
   { key: 'brightness', label: 'Brightness', min: -100, max: 100, default: 0 },
   { key: 'contrast', label: 'Contrast', min: -100, max: 100, default: 0 },
   { key: 'saturation', label: 'Saturation', min: -100, max: 100, default: 0 },
-  { key: 'temperature', label: 'Temperature', min: -100, max: 100, default: 0 },
-  { key: 'hue', label: 'Hue Shift', min: -180, max: 180, default: 0 },
+  { key: 'temperature', label: 'Temp', min: -100, max: 100, default: 0 },
+  { key: 'hue', label: 'Hue', min: -180, max: 180, default: 0 },
   { key: 'sharpness', label: 'Sharpness', min: 0, max: 100, default: 0 },
   { key: 'exposure', label: 'Exposure', min: -100, max: 100, default: 0 },
 ];
@@ -36,10 +31,10 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
   }, [onAdjust]);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-dim)]">
-          Adjustments
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-dim)]">
+          adjustments
         </span>
         {onResetAll && (
           <button
@@ -51,7 +46,7 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             }}
             className="text-[11px] text-[var(--text-dim)] hover:text-white flex items-center gap-1"
           >
-            <FiRotateCcw className="w-3 h-3" /> Reset all
+            <FiRotateCcw className="w-3 h-3" /> reset
           </button>
         )}
       </div>
@@ -66,11 +61,11 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
         return (
           <div key={adj.key} className="group">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-[var(--text-dim)] group-hover:text-white transition-colors">
+              <span className="text-[11px] text-[var(--text-dim)] group-hover:text-white transition-colors font-medium">
                 {adj.label}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-[var(--text-dim)] tabular-nums w-8 text-right">
+                <span className="text-[11px] text-[var(--text-dim)] tabular-nums w-7 text-right font-mono">
                   {val}
                 </span>
                 {!isDefault && (
@@ -84,14 +79,11 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
               </div>
             </div>
             <input
-              type="range"
-              min={adj.min}
-              max={adj.max}
-              value={val}
+              type="range" min={adj.min} max={adj.max} value={val}
               onChange={(e) => handleChange(adj.key, e.target.value)}
               className="slider"
               style={{
-                background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
+                background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${pct}%, #222 ${pct}%)`,
               }}
             />
           </div>
@@ -101,13 +93,8 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
   );
 }
 
-/**
- * Apply adjustment operations to a canvas from an image data URL.
- * This is used by the main page to render the adjusted image.
- */
 export function applyAdjustments(imageSrc, adjustments) {
   if (!imageSrc || !adjustments) return Promise.resolve(imageSrc);
-
   const hasAny = Object.values(adjustments).some((v) => v !== 0);
   if (!hasAny) return Promise.resolve(imageSrc);
 
@@ -120,72 +107,36 @@ export function applyAdjustments(imageSrc, adjustments) {
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
-
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const d = imageData.data;
 
-      const brightness = (adjustments.brightness || 0) * 2.55; // -255 to 255
+      const brightness = (adjustments.brightness || 0) * 2.55;
       const contrast = (adjustments.contrast || 0) / 100;
       const saturation = (adjustments.saturation || 0) / 100;
       const temperature = (adjustments.temperature || 0) / 100;
       const exposure = (adjustments.exposure || 0) / 100;
-      const sharpness = (adjustments.sharpness || 0) / 100;
-
-      const contrastFactor = (1 + contrast) * (1 + contrast); // quadratic feel
+      const contrastFactor = (1 + contrast) * (1 + contrast);
 
       for (let i = 0; i < d.length; i += 4) {
         let r = d[i], g = d[i+1], b = d[i+2];
-
-        // Brightness
         r += brightness; g += brightness; b += brightness;
-
-        // Exposure
-        if (exposure !== 0) {
-          const expMul = Math.pow(2, exposure);
-          r *= expMul; g *= expMul; b *= expMul;
-        }
-
-        // Contrast
+        if (exposure !== 0) { const m = Math.pow(2, exposure); r *= m; g *= m; b *= m; }
         if (contrast !== 0) {
           r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
           g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
           b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
         }
-
-        // Saturation
         if (saturation !== 0) {
           const gray = 0.299 * r + 0.587 * g + 0.114 * b;
           const sat = 1 + saturation;
-          r = gray + sat * (r - gray);
-          g = gray + sat * (g - gray);
-          b = gray + sat * (b - gray);
+          r = gray + sat * (r - gray); g = gray + sat * (g - gray); b = gray + sat * (b - gray);
         }
-
-        // Temperature (warm/cool shift)
-        if (temperature !== 0) {
-          r += temperature * 30;
-          b -= temperature * 30;
-        }
-
-        d[i]   = Math.max(0, Math.min(255, r));
+        if (temperature !== 0) { r += temperature * 30; b -= temperature * 30; }
+        d[i] = Math.max(0, Math.min(255, r));
         d[i+1] = Math.max(0, Math.min(255, g));
         d[i+2] = Math.max(0, Math.min(255, b));
       }
-
       ctx.putImageData(imageData, 0, 0);
-
-      // Simple sharpen via unsharp mask approximation
-      if (sharpness > 0) {
-        const amount = sharpness * 0.5;
-        ctx.globalCompositeOperation = 'overlay';
-        ctx.filter = `contrast(${100 + amount * 100}%)`;
-        ctx.globalAlpha = amount * 0.3;
-        ctx.drawImage(canvas, 0, 0);
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.filter = 'none';
-        ctx.globalAlpha = 1;
-      }
-
       resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = () => resolve(imageSrc);

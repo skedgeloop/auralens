@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { FiCheck, FiX, FiInfo } from 'react-icons/fi';
 
 const ICONS = {
-  success: <FiCheck className="w-4 h-4 text-emerald-400" />,
-  error: <FiX className="w-4 h-4 text-red-400" />,
-  info: <FiInfo className="w-4 h-4 text-blue-400" />,
+  success: <FiCheck className="w-4 h-4 text-[var(--pink)]" />,
+  error: <FiX className="w-4 h-4 text-[var(--danger)]" />,
+  info: <FiInfo className="w-4 h-4 text-white" />,
 };
 
 export default function Toast({ message, type = 'info', onClose, duration = 3000 }) {
@@ -13,23 +13,22 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
   useEffect(() => {
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onClose, 250); // wait for fade-out
+      setTimeout(onClose, 200);
     }, duration);
     return () => clearTimeout(timer);
   }, [duration, onClose]);
 
   return (
     <div
-      className={`toast ${type === 'success' ? 'toast-success' : type === 'error' ? 'toast-error' : ''}`}
+      className="toast"
       style={{
-        animation: visible ? 'toast-in 0.25s ease' : 'toast-out 0.25s ease forwards',
-        opacity: visible ? 1 : 0,
+        animation: visible ? 'toast-in 0.2s ease' : 'toast-out 0.2s ease forwards',
       }}
     >
       {ICONS[type] || ICONS.info}
-      <span className="text-[var(--text)]">{message}</span>
+      <span>{message}</span>
       <button
-        onClick={() => { setVisible(false); setTimeout(onClose, 250); }}
+        onClick={() => { setVisible(false); setTimeout(onClose, 200); }}
         className="ml-2 text-[var(--text-dim)] hover:text-white"
       >
         <FiX className="w-3.5 h-3.5" />

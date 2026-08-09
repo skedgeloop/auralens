@@ -1,51 +1,41 @@
 import React from 'react';
 import { FiZap, FiCheck } from 'react-icons/fi';
 
-const EditSuggestions = ({ suggestions, onApplyEdit, appliedFilter }) => {
+export default function EditSuggestions({ suggestions, onApplyEdit, appliedFilter }) {
   return (
-    <div className="glass rounded-3xl p-5">
-      <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[#94a0c3] mb-4 flex items-center">
-        <FiZap className="w-3.5 h-3.5 mr-2 text-amber-300" />
-        AI Suggestions
-      </h3>
-
-      <div className="space-y-2.5">
-        {suggestions.map((suggestion, index) => {
-          const isApplied = appliedFilter === suggestion.filter;
-          return (
-            <button
-              key={index}
-              onClick={() => onApplyEdit(suggestion.filter)}
-              disabled={isApplied}
-              className={`w-full text-left rounded-2xl p-3.5 border transition-all duration-200
-                ${
-                  isApplied
-                    ? 'border-cyan-400/60 bg-cyan-400/10'
-                    : 'border-white/10 bg-white/[0.03] hover:border-violet-400/50 hover:bg-white/[0.06]'
-                }`}
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white
-                    ${
-                      isApplied
-                        ? 'bg-cyan-400'
-                        : 'bg-gradient-to-br from-violet-500 to-cyan-400 shadow-[0_0_16px_-4px_rgba(139,92,246,0.8)]'
-                    }`}
-                >
-                  {isApplied ? <FiCheck className="w-3.5 h-3.5" /> : index + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white/90 leading-snug">{suggestion.text}</p>
-                  <p className="text-xs text-[#94a0c3] mt-1 line-clamp-2">{suggestion.reason}</p>
-                </div>
+    <div className="flex flex-col gap-2">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-dim)] flex items-center gap-1.5">
+        <FiZap className="w-3 h-3 text-[var(--pink)]" /> suggestions
+      </span>
+      {suggestions.map((suggestion, index) => {
+        const isApplied = appliedFilter === suggestion.filter;
+        return (
+          <button
+            key={index}
+            onClick={() => onApplyEdit(suggestion.filter)}
+            disabled={isApplied}
+            className={`w-full text-left rounded-lg p-3 border transition-all text-left ${
+              isApplied
+                ? 'border-[var(--pink)]/40 bg-[rgba(255,45,111,0.06)]'
+                : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--pink)]/30'
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <span className={`mt-0.5 shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                isApplied ? 'bg-[var(--pink)] text-black' : 'bg-[var(--surface-2)] text-[var(--text-dim)]'
+              }`}>
+                {isApplied ? <FiCheck className="w-3 h-3" /> : index + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] text-white leading-snug font-medium">{suggestion.text}</p>
+                {suggestion.reason && (
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5 truncate">{suggestion.reason}</p>
+                )}
               </div>
-            </button>
-          );
-        })}
-      </div>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
-};
-
-export default EditSuggestions;
+}

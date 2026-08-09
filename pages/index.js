@@ -7,6 +7,7 @@ import {
 import UploadArea from '../src/components/UploadArea';
 import FilterControls from '../src/components/FilterControls';
 import EditSuggestions from '../src/components/EditSuggestions';
+import AIPanel from '../src/components/AIPanel';
 import Toolbar from '../src/components/Toolbar';
 import ComparisonSlider from '../src/components/ComparisonSlider';
 import AdjustmentPanel, { applyAdjustments } from '../src/components/AdjustmentPanel';
@@ -18,20 +19,21 @@ import {
   rotateImage, flipImage, getImageDimensions,
 } from '../src/lib/imageFilters';
 import { suggestEdits } from '../src/lib/filterSuggestions';
+import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 const BOX_COLORS = ['#818cf8', '#6366f1', '#a78bfa', '#8b5cf6', '#c084fc', '#e879f9'];
 
 const FEATURES = [
-  { icon: FiEye, title: 'Object detection', desc: 'AI identifies what\'s inside your photo' },
-  { icon: FiLayers, title: 'Smart filters', desc: 'Edits suggested for your subjects' },
-  { icon: FiZap, title: 'One-click export', desc: 'Download a polished PNG, JPG or WebP' },
+  { icon: FiZap, title: 'Zero effort edits', desc: 'Drop a pic, AI does the work. You just vibe.' },
+  { icon: FiEye, title: 'Sees everything', desc: '80+ object classes. It knows what you ate for lunch.' },
+  { icon: FiSliders, title: 'Smart picks', desc: 'Filters & edits chosen by AI. Not random. Actually smart.' },
 ];
 
 const SIDEBAR_TABS = [
+  { key: 'ai', label: 'AI', icon: FiZapIcon },
   { key: 'adjust', label: 'Adjust', icon: FiSliders },
   { key: 'filter', label: 'Filters', icon: FiFilter },
-  { key: 'ai', label: 'AI', icon: FiZapIcon },
 ];
 
 export default function Home() {
@@ -45,6 +47,11 @@ export default function Home() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [editSuggestions, setEditSuggestions] = useState([]);
   const modelRef = useRef(null);
+
+  // AI analysis
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysisReady, setAiAnalysisReady] = useState(false);
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -128,7 +135,70 @@ export default function Home() {
     setZoom(1);
     setIsComparing(false);
     setDisplayedImage(dataUrl);
-  }, []);
+    setActiveTab('ai');
+
+    // Automatically run AI analysis + detection on upload
+    (async () => {
+      setIsAnalyzing(true);
+      try {
+        // Run image analysis + object detection in parallel
+        const [analysisResult, detectionResult] = await Promise.allSettled([
+          analyzeImage(dataUrl),
+          (async () => {
+            if (!modelRef.current) {
+              const cocoSSD = await import('@tensorflow-models/coco-ssd');
+              modelRef.current = await cocoSSD.load({ base: 'lite_mobilenet_v2' });
+            }
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.src = dataUrl;
+            await new Promise((r, e) => { img.onload = r; img.onerror = e; });
+            return modelRef.current.detect(img);
+          })(),
+        ]);
+
+        // Apply analysis results
+        if (analysisResult.status === 'fulfilled' && analysisResult.value) {
+          const analysis = analysisResult.value;
+          setAiAnalysis(analysis);
+
+          // Auto-apply the computed optimal settings
+          if (analysis.autoEnhance) {
+            setAdjustments(analysis.autoEnhance);
+            showToast('AI analyzed your image and applied optimal settings', 'success');
+          }
+
+          // Show suggestions based on analysis
+          const suggestions = analysis.suggestions || [];
+          setEditSuggestions(suggestions.map(s => ({
+            text: s.reason,
+            filter: s.action?.name || s.action,
+            reason: `Confidence: ${Math.round((s.confidence || 0.5) * 100)}%`,
+          })));
+        }
+
+        // Apply detection results
+        if (detectionResult.status === 'fulfilled') {
+          const objects = detectionResult.value || [];
+          setDetectedObjects(objects);
+
+          // Add detection-based suggestions
+          const detectionSuggestions = suggestEdits(objects);
+          setEditSuggestions(prev => [...detectionSuggestions, ...prev].slice(0, 8));
+
+          if (objects.length > 0) {
+            showToast(`Found ${objects.length} object${objects.length !== 1 ? 's' : ''} in your photo`, 'success');
+          }
+        }
+      } catch (err) {
+        console.error('AI analysis error:', err);
+        showToast('AI analysis completed with some limitations', 'info');
+      } finally {
+        setIsAnalyzing(false);
+        setAiAnalysisReady(true);
+      }
+    })();
+  }, [showToast]);
 
   const handleNewImage = useCallback(() => {
     setOriginalImage(null);
@@ -291,14 +361,15 @@ export default function Home() {
             {/* Header */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--text-dim)] mb-4">
-                <FiStar className="w-3 h-3 text-amber-400" />
-                AI-Powered · In-Browser · 100% Private
+                <FiStar className="w-3 h-3 text-pink" />
+                no account · no cloud · just vibes
               </div>
-              <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight mb-3">
-                Edit with <span className="text-gradient">intelligence</span>
+              <h1 className="font-display text-5xl md:text-6xl font-bold tracking-tight mb-3">
+                your photos,<br />
+                <span className="text-pink">but make it iconic.</span>
               </h1>
               <p className="text-[var(--text-dim)] text-sm md:text-base max-w-md mx-auto">
-                Upload a photo, let AI detect objects, and apply professional edits — all in your browser.
+                drop a pic. AI detects what's in it, slaps on the right edits, and hands you the wheel. or just let it cook.
               </p>
             </div>
 
@@ -455,55 +526,36 @@ export default function Home() {
               )}
 
               {activeTab === 'ai' && (
-                <div className="flex flex-col gap-4">
-                  <button
-                    onClick={runAIDetection}
-                    disabled={isDetecting}
-                    className="btn btn-primary w-full"
-                  >
-                    {isDetecting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                        Detecting…
-                      </>
-                    ) : (
-                      <><FiZapIcon className="w-4 h-4" /> Run AI Detection</>
-                    )}
-                  </button>
-                  <p className="text-[11px] text-[var(--text-dim)] text-center leading-relaxed">
-                    Downloads the model (~2MB) on first run. Your image never leaves your browser.
-                  </p>
-
-                  {editSuggestions.length > 0 && (
-                    <EditSuggestions
-                      suggestions={editSuggestions}
-                      onApplyEdit={handleFilterSelect}
-                      appliedFilter={activeFilter}
-                    />
-                  )}
-
-                  {detectedObjects.length > 0 && (
-                    <div className="panel p-3">
-                      <p className="text-[11px] font-semibold text-[var(--text-dim)] uppercase tracking-wider mb-2">
-                        Detected Objects ({detectedObjects.length})
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {detectedObjects.map((obj, i) => {
-                          const color = BOX_COLORS[i % BOX_COLORS.length];
-                          return (
-                            <span
-                              key={`${obj.class}-${i}`}
-                              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                              style={{ color, background: `${color}18`, border: `1px solid ${color}33` }}
-                            >
-                              {obj.class}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <AIPanel
+                  imageSrc={currentImage}
+                  detectedObjects={detectedObjects}
+                  isAnalyzing={isAnalyzing}
+                  onApplySuggestion={(suggestion) => {
+                    if (suggestion.type === 'adjustment' && suggestion.action) {
+                      setAdjustments(prev => ({ ...prev, ...suggestion.action }));
+                      showToast(`Applied: ${suggestion.reason}`, 'success');
+                    } else if (suggestion.type === 'filter' && suggestion.action) {
+                      handleFilterSelect(suggestion.action);
+                    }
+                  }}
+                  onAutoEnhance={(settings) => {
+                    setAdjustments(settings);
+                    showToast('AI Enhanced — brightness, contrast, saturation adjusted', 'success');
+                  }}
+                  onNaturalLanguage={(actions) => {
+                    actions.forEach(action => {
+                      if (action.type === 'adjustment') {
+                        setAdjustments(prev => ({ ...prev, [action.key]: action.value }));
+                      } else if (action.type === 'filter') {
+                        handleFilterSelect(action.name);
+                      } else if (action.type === 'auto-enhance' && aiAnalysis?.autoEnhance) {
+                        setAdjustments(aiAnalysis.autoEnhance);
+                      }
+                    });
+                    showToast('Applied AI edits', 'success');
+                  }}
+                  onAnalysisComplete={(analysis) => setAiAnalysis(analysis)}
+                />
               )}
             </div>
 
