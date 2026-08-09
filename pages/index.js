@@ -64,7 +64,7 @@ export default function Home() {
   const [filterCategory, setFilterCategory] = useState('all');
 
   // UI state
-  const [activeTab, setActiveTab] = useState('adjust');
+  const [activeTab, setActiveTab] = useState('ai');
   const [zoom, setZoom] = useState(1);
   const [isComparing, setIsComparing] = useState(true);
   const [showExport, setShowExport] = useState(false);
@@ -292,6 +292,22 @@ export default function Home() {
     } catch (err) { console.error('Gradient failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
+  // Live preview of color grade — updates the display instantly on drag
+  // (no history push; only "apply" commits a step).
+  const gradePreviewRef = useRef(null);
+  const handlePreviewGrade = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const graded = await applyColorGrade(base, opts);
+        setDisplayedImage(graded);
+      } catch (err) { console.error('Grade preview failed:', err); }
+    };
+    clearTimeout(gradePreviewRef.current);
+    gradePreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
+
   // ---- Transform ----
   const handleRotate = useCallback(async (degrees) => {
     if (!currentImage) return;
@@ -447,6 +463,22 @@ export default function Home() {
                       editedSrc={displayedImage}
                       isComparing={isComparing}
                     />
+
+                    {/* Analyzing overlay — big pulsing circle */}
+                    {isAnalyzing && (
+                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/40 pointer-events-none">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 rounded-full border-2 border-[var(--pink)]/30 animate-ping" />
+                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[var(--pink)] animate-spin" />
+                            <div className="absolute inset-3 rounded-full bg-[var(--pink)]/20 backdrop-blur-sm flex items-center justify-center">
+                              <span className="text-[9px] text-[var(--pink)] font-bold uppercase tracking-wider">AI</span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-white font-medium">analyzing…</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Applying recommended changes overlay */}
                     {applying && (
@@ -630,6 +662,7 @@ export default function Home() {
                   activeAdjustments={adjustments}
                   onResetAll={handleAdjustResetAll}
                   onApplyGradient={handleApplyGradient}
+                  onPreviewGrade={handlePreviewGrade}
                   previewImage={currentImage}
                 />
               )}

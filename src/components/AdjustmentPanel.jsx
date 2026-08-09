@@ -17,7 +17,7 @@ const RGB_CHANNELS = [
   { key: 'b', label: 'Blue', default: 100 },
 ];
 
-export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAll, onApplyGradient, previewImage }) {
+export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAll, onApplyGradient, onPreviewGrade, previewImage }) {
   const [local, setLocal] = useState(() => {
     const init = {};
     ADJUSTMENTS.forEach((a) => { init[a.key] = a.default; });
@@ -41,17 +41,24 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
     onAdjust(key, def);
   }, [onAdjust]);
 
+  const gradeOptions = useCallback(() => ({
+    rgb,
+    gradient: [
+      { pos: 0, color: shadowColor },
+      { pos: 1, color: highlightColor },
+    ],
+    temperature: gradeTemp,
+    vibrance: gradeVib,
+  }), [rgb, shadowColor, highlightColor, gradeTemp, gradeVib]);
+
+  // Live preview on every slider/color change
+  const previewGrade = useCallback(() => {
+    onPreviewGrade?.(gradeOptions());
+  }, [onPreviewGrade, gradeOptions]);
+
   const handleApplyGrade = useCallback(() => {
-    onApplyGradient?.({
-      rgb,
-      gradient: [
-        { pos: 0, color: shadowColor },
-        { pos: 1, color: highlightColor },
-      ],
-      temperature: gradeTemp,
-      vibrance: gradeVib,
-    });
-  }, [onApplyGradient, rgb, shadowColor, highlightColor, gradeTemp, gradeVib]);
+    onApplyGradient?.(gradeOptions());
+  }, [onApplyGradient, gradeOptions]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -128,7 +135,7 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             </div>
             <input
               type="range" min={0} max={200} value={rgb[ch.key]}
-              onChange={(e) => setRgb((p) => ({ ...p, [ch.key]: Number(e.target.value) }))}
+              onChange={(e) => { setRgb((p) => ({ ...p, [ch.key]: Number(e.target.value) })); previewGrade(); }}
               className="slider"
               style={{
                 background: `linear-gradient(to right, ${ch.key === 'r' ? '#ff4d6d' : ch.key === 'g' ? '#4dff88' : '#4d8dff'} 0%, ${ch.key === 'r' ? '#ff4d6d' : ch.key === 'g' ? '#4dff88' : '#4d8dff'} ${((rgb[ch.key] - 0) / 200) * 100}%, #222 ${((rgb[ch.key] - 0) / 200) * 100}%)`,
@@ -142,12 +149,12 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] text-[var(--text-dim)]">shadows</span>
-              <input type="color" value={shadowColor} onChange={(e) => setShadowColor(e.target.value)}
+              <input type="color" value={shadowColor} onChange={(e) => { setShadowColor(e.target.value); previewGrade(); }}
                 className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-[var(--text-dim)]">highlights</span>
-              <input type="color" value={highlightColor} onChange={(e) => setHighlightColor(e.target.value)}
+              <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); previewGrade(); }}
                 className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
             </div>
           </div>
@@ -162,14 +169,14 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             <span className="text-[11px] text-[var(--text-dim)]">temperature</span>
             <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeTemp}</span>
           </div>
-          <input type="range" min={-100} max={100} value={gradeTemp} onChange={(e) => setGradeTemp(Number(e.target.value))} className="slider" />
+          <input type="range" min={-100} max={100} value={gradeTemp} onChange={(e) => { setGradeTemp(Number(e.target.value)); previewGrade(); }} className="slider" />
         </div>
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] text-[var(--text-dim)]">vibrance</span>
             <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeVib}</span>
           </div>
-          <input type="range" min={-100} max={100} value={gradeVib} onChange={(e) => setGradeVib(Number(e.target.value))} className="slider" />
+          <input type="range" min={-100} max={100} value={gradeVib} onChange={(e) => { setGradeVib(Number(e.target.value)); previewGrade(); }} className="slider" />
         </div>
 
         <button onClick={handleApplyGrade} className="btn btn-pink w-full mt-4 py-2.5 text-xs">
