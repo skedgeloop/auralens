@@ -67,7 +67,7 @@ export default function Home() {
   // UI state
   const [activeTab, setActiveTab] = useState('adjust');
   const [zoom, setZoom] = useState(1);
-  const [isComparing, setIsComparing] = useState(false);
+  const [isComparing, setIsComparing] = useState(true);
   const [showExport, setShowExport] = useState(false);
   const [toast, setToast] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });

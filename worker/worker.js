@@ -12,6 +12,26 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// Simple in-memory rate limiter (per Worker instance)
+const rateLimitMap = new Map();
+const RATE_LIMIT = 30; // requests per minute
+const RATE_WINDOW = 60000; // 1 minute
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip) || { count: 0, resetAt: now + RATE_WINDOW };
+
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + RATE_WINDOW;
+  }
+
+  record.count++;
+  rateLimitMap.set(ip, record);
+
+  return record.count <= RATE_LIMIT;
+}
+
 export default {
   async fetch(request, env) {
     // Handle CORS preflight
@@ -22,6 +42,15 @@ export default {
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'POST only' }), {
         status: 405,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Rate limiting
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    if (!checkRateLimit(ip)) {
+      return new Response(JSON.stringify({ error: 'Rate limited. Try again in a minute.' }), {
+        status: 429,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }

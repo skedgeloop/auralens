@@ -105,6 +105,28 @@ export default function AIPanel({
         {activeSection === 'all' && !isAnalyzing && (
           <div className="flex flex-col gap-3">
 
+            {/* === MAIN AURA — the first thing people see === */}
+            {tripleAi?.vibe?.hasVibe && (
+              <div className="panel p-4 border-[var(--pink)]/30 bg-[rgba(255,45,111,0.06)]">
+                <div className="flex items-center gap-2 mb-1">
+                  <FiZap className="w-4 h-4 text-[var(--pink)]" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--pink)]">your aura</span>
+                </div>
+                <div className="text-xl font-bold text-white mb-1">
+                  {tripleAi.vibe.topLabel}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--pink)] rounded-full" style={{ width: `${tripleAi.vibe.topScore}%` }} />
+                  </div>
+                  <span className="text-sm text-[var(--pink)] font-bold font-mono">{tripleAi.vibe.topScore}%</span>
+                </div>
+                <p className="text-[11px] text-[var(--text-dim)] mt-2">
+                  {tripleAi.summary}
+                </p>
+              </div>
+            )}
+
             {/* === FACE EMOTIONS (face-api) === */}
             <div className="panel p-3">
               <div className="flex items-center gap-2 mb-2">
