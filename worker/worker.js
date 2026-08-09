@@ -174,9 +174,11 @@ async function analyzeVibe(imageBlob) {
           image: await blobToBase64(imageBlob),
           parameters: {
             candidate_labels: [
-              'happy energy', 'sad mood', 'sassy aura', 'chaotic vibe',
-              'calm peaceful', 'dark mysterious', 'bright cheerful', 'moody dramatic',
-              'elegant sophisticated', 'raw intense', 'dreamy ethereal', 'playful fun',
+              'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
+              'alpha energy', 'main character', 'hot', 'aesthetic',
+              'iconic', 'legendary', 'dark vibes', 'soft vibes',
+              'chaotic energy', 'elegant', 'classy', 'boss energy',
+              'dreamy', 'ethereal', 'playful', 'mysterious',
             ],
           },
         },

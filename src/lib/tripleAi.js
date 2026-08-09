@@ -167,20 +167,13 @@ export const runPixelAnalysis = async (imageSrc) => {
   const brightRatio = brightPixels / count;
 
   // Determine vibe from colors
-  let vibeLabel = 'balanced';
-  if (warmth > 0.15 && avgLum > 120) vibeLabel = 'bright cheerful';
-  else if (warmth > 0.1) vibeLabel = 'warm tones';
-  else if (warmth < -0.1) vibeLabel = 'cool tones';
-  else if (darkRatio > 0.6) vibeLabel = 'dark mysterious';
-  else if (brightRatio > 0.6) vibeLabel = 'bright airy';
-  else if (avgLum < 80) vibeLabel = 'moody dramatic';
-
-  // Determine mood
-  let mood = 'neutral';
-  if (warmth > 0.1) mood = 'warm';
-  if (warmth < -0.1) mood = 'cool';
-  if (darkRatio > 0.6) mood = 'dark';
-  if (brightRatio > 0.6) mood = 'bright';
+  let vibeLabel = 'aesthetic';
+  if (warmth > 0.15 && avgLum > 120) vibeLabel = 'gorgeous';
+  else if (warmth > 0.1) vibeLabel = 'warm vibes';
+  else if (warmth < -0.1) vibeLabel = 'cool vibes';
+  else if (darkRatio > 0.6) vibeLabel = 'dark vibes';
+  else if (brightRatio > 0.6) vibeLabel = 'stunning';
+  else if (avgLum < 80) vibeLabel = 'mysterious';
 
   return {
     face: { hasFace: false, emotions: {}, faceCount: 0 },
@@ -189,15 +182,14 @@ export const runPixelAnalysis = async (imageSrc) => {
       topScore: Math.round(Math.abs(warmth) * 100 + 30),
       scores: {
         [vibeLabel]: Math.round(Math.abs(warmth) * 100 + 30),
-        'warm tones': Math.round(Math.max(0, warmth) * 100),
-        'cool tones': Math.round(Math.max(0, -warmth) * 100),
-        'dark mysterious': Math.round(darkRatio * 100),
-        'bright cheerful': Math.round(brightRatio * 100),
+        'hot': Math.round(Math.max(0, warmth) * 80),
+        'cute': Math.round(brightRatio * 70),
+        'aesthetic': Math.round(50),
       },
       hasVibe: true,
     },
     objects: { objects: [], hasObjects: false },
-    summary: `mood: ${mood} · warmth: ${Math.round(warmth * 100)}% · R:${Math.round(avgR)} G:${Math.round(avgG)} B:${Math.round(avgB)}`,
+    summary: `vibe: ${vibeLabel} · warmth: ${Math.round(warmth * 100)}%`,
   };
 };
 
