@@ -4,7 +4,7 @@ import {
   FiArrowRight, FiCheck, FiLoader, FiMessageSquare, FiSmile,
 } from 'react-icons/fi';
 import { analyzeImage, processNaturalLanguage } from '../lib/aiEngine';
-import { runTripleAnalysis } from '../lib/tripleAi';
+import { runTripleAnalysis, runPixelAnalysis } from '../lib/tripleAi';
 import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
 
 export default function AIPanel({
@@ -19,12 +19,12 @@ export default function AIPanel({
   const [activeSection, setActiveSection] = useState('all');
   const [blurLoading, setBlurLoading] = useState(false);
   const [enhanceLoading, setEnhanceLoading] = useState(false);
+  const [aiTier, setAiTier] = useState('loading');
 
   useEffect(() => {
     if (!imageSrc) { setAnalysis(null); setTripleAi(null); return; }
     let cancelled = false;
 
-    // Run all analyses in parallel
     (async () => {
       const [imgAnalysis, tripleResult] = await Promise.allSettled([
         analyzeImage(imageSrc),
@@ -33,7 +33,16 @@ export default function AIPanel({
 
       if (!cancelled) {
         if (imgAnalysis.status === 'fulfilled') setAnalysis(imgAnalysis.value);
-        if (tripleResult.status === 'fulfilled') setTripleAi(tripleResult.value);
+        if (tripleResult.status === 'fulfilled') {
+          setTripleAi(tripleResult.value);
+          setAiTier(tripleResult.value.tier || 'pixel');
+          // If pixel fallback, run async pixel analysis for better results
+          if (tripleResult.value._pending) {
+            runPixelAnalysis(imageSrc).then((pixelResult) => {
+              if (!cancelled) setTripleAi(pixelResult);
+            });
+          }
+        }
         onAnalysisComplete?.(imgAnalysis.value);
       }
     })();
@@ -97,7 +106,21 @@ export default function AIPanel({
         {isAnalyzing && (
           <div className="flex flex-col items-center gap-2 py-6">
             <FiLoader className="w-5 h-5 text-[var(--pink)] animate-spin" />
-            <p className="text-xs text-[var(--text-dim)] font-medium">running 3 AI models...</p>
+            <p className="text-xs text-[var(--text-dim)] font-medium">running AI...</p>
+          </div>
+        )}
+
+        {/* Tier indicator */}
+        {!isAnalyzing && aiTier && aiTier !== 'loading' && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              aiTier === 'server' ? 'bg-emerald-400' :
+              aiTier === 'browser' ? 'bg-amber-400' : 'bg-[var(--text-dim)]'
+            }`} />
+            <span className="text-[9px] text-[var(--text-dim)] uppercase tracking-wider">
+              {aiTier === 'server' ? 'cloud ai' :
+               aiTier === 'browser' ? 'browser ai' : 'pixel analysis'}
+            </span>
           </div>
         )}
 
