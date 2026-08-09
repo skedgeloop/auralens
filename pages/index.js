@@ -20,6 +20,7 @@ import {
 } from '../src/lib/imageFilters';
 import { suggestEdits } from '../src/lib/filterSuggestions';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
+import { runTripleAnalysis } from '../src/lib/tripleAi';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 const BOX_COLORS = ['#818cf8', '#6366f1', '#a78bfa', '#8b5cf6', '#c084fc', '#e879f9'];
@@ -52,6 +53,9 @@ export default function Home() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisReady, setAiAnalysisReady] = useState(false);
+  const [tripleAi, setTripleAi] = useState(null);
+  const [aiTier, setAiTier] = useState('');
+  const [showAiPanel, setShowAiPanel] = useState(true);
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -137,39 +141,18 @@ export default function Home() {
     setDisplayedImage(dataUrl);
     setActiveTab('ai');
 
-    // Automatically run AI analysis + detection on upload
+    // Run AI analysis + triple analysis on upload
     (async () => {
       setIsAnalyzing(true);
       try {
-        // Run image analysis + object detection in parallel
-        const [analysisResult, detectionResult] = await Promise.allSettled([
+        const [analysisResult, tripleResult] = await Promise.allSettled([
           analyzeImage(dataUrl),
-          (async () => {
-            if (!modelRef.current) {
-              const cocoSSD = await import('@tensorflow-models/coco-ssd');
-              modelRef.current = await cocoSSD.load({ base: 'lite_mobilenet_v2' });
-            }
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.src = dataUrl;
-            await new Promise((r, e) => { img.onload = r; img.onerror = e; });
-            return modelRef.current.detect(img);
-          })(),
+          runTripleAnalysis(dataUrl),
         ]);
 
-        // Apply analysis results
         if (analysisResult.status === 'fulfilled' && analysisResult.value) {
-          const analysis = analysisResult.value;
-          setAiAnalysis(analysis);
-
-          // Auto-apply the computed optimal settings
-          if (analysis.autoEnhance) {
-            setAdjustments(analysis.autoEnhance);
-            showToast('AI analyzed your image and applied optimal settings', 'success');
-          }
-
-          // Show suggestions based on analysis
-          const suggestions = analysis.suggestions || [];
+          setAiAnalysis(analysisResult.value);
+          const suggestions = analysisResult.value.suggestions || [];
           setEditSuggestions(suggestions.map(s => ({
             text: s.reason,
             filter: s.action?.name || s.action,
@@ -177,22 +160,18 @@ export default function Home() {
           })));
         }
 
-        // Apply detection results
-        if (detectionResult.status === 'fulfilled') {
-          const objects = detectionResult.value || [];
-          setDetectedObjects(objects);
-
-          // Add detection-based suggestions
-          const detectionSuggestions = suggestEdits(objects);
-          setEditSuggestions(prev => [...detectionSuggestions, ...prev].slice(0, 8));
-
-          if (objects.length > 0) {
-            showToast(`Found ${objects.length} object${objects.length !== 1 ? 's' : ''} in your photo`, 'success');
+        if (tripleResult.status === 'fulfilled') {
+          setTripleAi(tripleResult.value);
+          setAiTier(tripleResult.value.tier || 'pixel');
+          if (tripleResult.value.objects?.objects) {
+            setDetectedObjects(tripleResult.value.objects.objects.map(o => ({
+              class: o.label, score: o.score / 100,
+              bbox: [0, 0, 100, 100],
+            })));
           }
         }
       } catch (err) {
-        console.error('AI analysis error:', err);
-        showToast('AI analysis completed with some limitations', 'info');
+        console.error('AI error:', err);
       } finally {
         setIsAnalyzing(false);
         setAiAnalysisReady(true);
@@ -450,10 +429,83 @@ export default function Home() {
                     {isDetecting && (
                       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-lg z-30">
                         <div className="flex flex-col items-center gap-3">
-                          <div className="w-8 h-8 border-2 border-white/20 border-t-[var(--accent)] rounded-full animate-spin" />
+                          <div className="w-8 h-8 border-2 border-white/20 border-t-[var(--pink)] rounded-full animate-spin" />
                           <p className="text-sm text-white/90">Detecting objects…</p>
                         </div>
                       </div>
+                    )}
+
+                    {/* Floating AI panel — left side */}
+                    {tripleAi && showAiPanel && !isDetecting && (
+                      <div className="absolute top-3 left-3 z-40 w-56 pointer-events-auto">
+                        <div className="bg-black/80 backdrop-blur-lg rounded-xl border border-white/10 p-3 space-y-2.5">
+                          {/* Tier badge */}
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              aiTier === 'server' ? 'bg-emerald-400' :
+                              aiTier === 'browser' ? 'bg-amber-400' : 'bg-gray-400'
+                            }`} />
+                            <span className="text-[9px] text-white/50 uppercase tracking-wider font-bold">
+                              {aiTier === 'server' ? 'cloud ai' : aiTier === 'browser' ? 'browser ai' : 'pixel'}
+                            </span>
+                          </div>
+
+                          {/* Aura */}
+                          {tripleAi.vibe?.hasVibe && (
+                            <div>
+                              <p className="text-[10px] text-[var(--pink)] uppercase tracking-wider font-bold">aura</p>
+                              <p className="text-sm font-bold text-white">{tripleAi.vibe.topLabel}</p>
+                              <div className="h-1 bg-white/10 rounded-full mt-1">
+                                <div className="h-full bg-[var(--pink)] rounded-full" style={{ width: `${tripleAi.vibe.topScore}%` }} />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Face emotions */}
+                          {tripleAi.face?.hasFace && (
+                            <div>
+                              <p className="text-[10px] text-[var(--pink)] uppercase tracking-wider font-bold">face</p>
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                                {Object.entries(tripleAi.face.emotions || {}).filter(([k]) => k !== 'sassiness').map(([k, v]) => (
+                                  <div key={k} className="flex items-center justify-between">
+                                    <span className="text-[9px] text-white/60 truncate">{k}</span>
+                                    <span className="text-[9px] text-white font-mono">{v}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {tripleAi.face.emotions?.sassiness > 0 && (
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[9px] text-[var(--pink)] font-bold">sassiness</span>
+                                  <span className="text-[10px] text-[var(--pink)] font-bold font-mono">{tripleAi.face.emotions.sassiness}%</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* No face */}
+                          {!tripleAi.face?.hasFace && (
+                            <p className="text-[10px] text-white/40">no face detected</p>
+                          )}
+
+                          {/* Close button */}
+                          <button
+                            onClick={() => setShowAiPanel(false)}
+                            className="absolute top-2 right-2 w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white text-[8px]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show AI panel button when hidden */}
+                    {!showAiPanel && tripleAi && (
+                      <button
+                        onClick={() => setShowAiPanel(true)}
+                        className="absolute top-3 left-3 z-40 w-8 h-8 rounded-full bg-[var(--pink)] flex items-center justify-center text-black font-bold text-xs shadow-lg"
+                      >
+                        AI
+                      </button>
                     )}
                   </>
                 )}
