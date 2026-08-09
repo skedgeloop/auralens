@@ -49,7 +49,7 @@ export default function Home() {
   const [tripleAi, setTripleAi] = useState(null);
   const [aiTier, setAiTier] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(true);
-  const [expandAiPanel, setExpandAiPanel] = useState(false);
+  const [expandAiPanel, setExpandAiPanel] = useState(true);
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -461,19 +461,19 @@ export default function Home() {
                     {/* Floating AI panel — left side */}
                     {tripleAi && showAiPanel && (
                       <div className="absolute top-3 left-3 z-40 pointer-events-auto">
-                        <div className="bg-black/80 backdrop-blur-lg rounded-xl border border-white/10 overflow-hidden"
-                          style={{ width: expandAiPanel ? '300px' : '220px', transition: 'width 0.2s ease' }}>
+                        <div className="bg-black/85 backdrop-blur-xl rounded-xl border border-[var(--border-soft)] shadow-[0_0_0_1px_var(--pink-glow),0_20px_60px_-20px_rgba(0,0,0,0.8)] overflow-hidden"
+                          style={{ width: expandAiPanel ? '320px' : '220px', transition: 'width 0.2s ease' }}>
 
                           {/* Header — always visible */}
                           <div className="p-3 pb-2">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${
-                                  aiTier === 'server' ? 'bg-pink' :
+                                  aiTier === 'server' ? 'bg-pink shadow-[0_0_8px_var(--pink)]' :
                                   aiTier === 'browser' ? 'bg-pink-dim' : 'bg-[var(--text-faint)]'
                                 }`} />
                                 <span className="text-[9px] text-white/50 uppercase tracking-wider font-bold">
-                                  {aiTier === 'server' ? 'cloud ai' : aiTier === 'browser' ? 'browser ai' : 'pixel'}
+                                  {aiTier === 'server' ? '☁️ cloud ai' : aiTier === 'browser' ? '💻 browser ai' : '📱 local pixel'}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1">
