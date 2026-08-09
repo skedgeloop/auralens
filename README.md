@@ -5,7 +5,7 @@
 
 ![AuraLens Screenshot](./screenshot.png)
 
-**[Live Demo →](YOUR_DEPLOYED_URL_HERE)**
+**[Live Demo →](auralens.pages.dev))**
 
 ---
 
