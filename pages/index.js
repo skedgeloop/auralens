@@ -68,7 +68,7 @@ export default function Home() {
   const [filterCategory, setFilterCategory] = useState('all');
 
   // UI state
-  const [activeTab, setActiveTab] = useState('adjust');
+  const [activeTab, setActiveTab] = useState('ai');
   const [zoom, setZoom] = useState(1);
   const [isComparing, setIsComparing] = useState(true);
   const [showExport, setShowExport] = useState(false);
