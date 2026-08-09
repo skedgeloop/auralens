@@ -24,18 +24,15 @@ export const loadBodySegmentation = async () => {
 
 /**
  * Apply background blur using body segmentation.
- * This is REAL AI — a neural network detects the person and masks the background.
+ * Uses feathered edges for smooth, natural-looking blur.
  */
-export const applyBackgroundBlur = async (imageSrc, blurAmount = 8) => {
+export const applyBackgroundBlur = async (imageSrc, blurAmount = 10) => {
   const img = await loadImage(imageSrc);
 
-  // Create canvases
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;
   const ctx = canvas.getContext('2d');
-
-  // Draw original
   ctx.drawImage(img, 0, 0);
 
   // Load model and segment
@@ -43,40 +40,65 @@ export const applyBackgroundBlur = async (imageSrc, blurAmount = 8) => {
   const segmentation = await segmenter.segmentPeople(img);
 
   if (!segmentation || segmentation.length === 0) {
-    return imageSrc; // No people found, return original
+    return imageSrc;
   }
 
   // Get the mask
   const mask = segmentation[0];
   const maskData = await mask.mask.toImageData();
 
-  // Create blurred version
+  // Create blurred version with STRONG blur
   const blurCanvas = document.createElement('canvas');
   blurCanvas.width = img.width;
   blurCanvas.height = img.height;
   const blurCtx = blurCanvas.getContext('2d');
   blurCtx.filter = `blur(${blurAmount}px)`;
   blurCtx.drawImage(img, 0, 0);
+  blurCtx.filter = 'none';
 
-  // Get blurred pixels
+  // Apply extra blur passes for smoother result
+  for (let pass = 0; pass < 2; pass++) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = img.width;
+    tempCanvas.height = img.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.filter = `blur(${blurAmount / 2}px)`;
+    tempCtx.drawImage(blurCanvas, 0, 0);
+    blurCtx.clearRect(0, 0, img.width, img.height);
+    blurCtx.drawImage(tempCanvas, 0, 0);
+  }
+
   const blurImageData = blurCtx.getImageData(0, 0, blurCanvas.width, blurCanvas.height);
   const originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  // Blend based on mask
+  // Create feathered mask with Gaussian-like falloff
+  const featherRadius = Math.max(5, Math.min(20, img.width / 50));
+
   for (let i = 0; i < maskData.data.length; i += 4) {
-    const alpha = maskData.data[i + 3] / 255; // 0 = background, 1 = person
-    // Where alpha is low (background), use blurred; where high (person), use original
-    const blended = alpha > 0.5 ? 1 : alpha * 2; // Sharper transition
-    originalImageData.data[i] = originalImageData.data[i] * blended + blurImageData.data[i] * (1 - blended);
-    originalImageData.data[i + 1] = originalImageData.data[i + 1] * blended + blurImageData.data[i + 1] * (1 - blended);
-    originalImageData.data[i + 2] = originalImageData.data[i + 2] * blended + blurImageData.data[i + 2] * (1 - blended);
+    const x = (i / 4) % img.width;
+    const y = Math.floor((i / 4) / img.width);
+
+    // Raw mask value (0 = background, 255 = person)
+    let maskVal = maskData.data[i + 3] / 255;
+
+    // Apply Gaussian-like feathering at edges
+    if (maskVal > 0.01 && maskVal < 0.99) {
+      // Edge zone — smooth the transition
+      const t = (maskVal - 0.01) / 0.98; // Normalize to 0-1
+      // Smoothstep function for natural falloff
+      maskVal = t * t * (3 - 2 * t);
+    }
+
+    // Blend original (person) with blurred (background)
+    const blend = maskVal;
+    originalImageData.data[i] = originalImageData.data[i] * blend + blurImageData.data[i] * (1 - blend);
+    originalImageData.data[i + 1] = originalImageData.data[i + 1] * blend + blurImageData.data[i + 1] * (1 - blend);
+    originalImageData.data[i + 2] = originalImageData.data[i + 2] * blend + blurImageData.data[i + 2] * (1 - blend);
   }
 
   ctx.putImageData(originalImageData, 0, 0);
 
-  // Dispose tensors
   segmenter.dispose();
-
   return canvas.toDataURL('image/png');
 };
 

@@ -440,11 +440,10 @@ export default function Home() {
                     {tripleAi && showAiPanel && !isDetecting && (
                       <div className="absolute top-3 left-3 z-40 pointer-events-auto">
                         <div className="bg-black/80 backdrop-blur-lg rounded-xl border border-white/10 overflow-hidden"
-                          style={{ width: expandAiPanel ? '280px' : '200px', transition: 'width 0.2s ease' }}>
+                          style={{ width: expandAiPanel ? '300px' : '220px', transition: 'width 0.2s ease' }}>
 
                           {/* Header — always visible */}
                           <div className="p-3 pb-2">
-                            {/* Tier + close */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${
@@ -465,11 +464,11 @@ export default function Home() {
                               </div>
                             </div>
 
-                            {/* Aura — always visible */}
+                            {/* Aura */}
                             {tripleAi.vibe?.hasVibe && (
                               <div>
                                 <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold">aura</p>
-                                <p className="text-base font-bold text-white leading-tight">{tripleAi.vibe.topLabel}</p>
+                                <p className="text-lg font-bold text-white leading-tight">{tripleAi.vibe.topLabel}</p>
                                 <div className="h-1.5 bg-white/10 rounded-full mt-1.5">
                                   <div className="h-full bg-[var(--pink)] rounded-full" style={{ width: `${tripleAi.vibe.topScore}%` }} />
                                 </div>
@@ -479,46 +478,42 @@ export default function Home() {
 
                           {/* Expanded details */}
                           {expandAiPanel && (
-                            <div className="px-3 pb-3 space-y-2.5 border-t border-white/5 pt-2.5">
+                            <div className="px-3 pb-3 space-y-3 border-t border-white/5 pt-2.5 max-h-[500px] overflow-y-auto">
 
-                              {/* Face emotions */}
-                              {tripleAi.face?.hasFace && (
-                                <div>
-                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1">emotions</p>
-                                  {[
-                                    { key: 'happiness', label: '😊 happy', color: '#22c55e' },
-                                    { key: 'sadness', label: '😢 sad', color: '#3b82f6' },
-                                    { key: 'anger', label: '😠 angry', color: '#ef4444' },
-                                    { key: 'surprise', label: '😲 surprise', color: '#f59e0b' },
-                                    { key: 'neutral', label: '😐 neutral', color: '#6b7280' },
-                                    { key: 'sassiness', label: '💅 sassy', color: '#ff2d6f' },
-                                  ].map(({ key, label, color }) => {
-                                    const val = tripleAi.face.emotions?.[key] || 0;
-                                    return (
-                                      <div key={key} className="flex items-center gap-1.5 mb-1">
-                                        <span className="text-[9px] w-14 shrink-0 truncate">{label}</span>
-                                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                                          <div className="h-full rounded-full" style={{ width: `${val}%`, background: color }} />
-                                        </div>
-                                        <span className="text-[9px] text-white font-mono w-6 text-right">{val}%</span>
+                              {/* Emotions — show even if no face (shows 0%) */}
+                              <div>
+                                <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">emotions</p>
+                                {[
+                                  { key: 'happiness', label: '😊 happy', color: '#22c55e' },
+                                  { key: 'sadness', label: '😢 sad', color: '#3b82f6' },
+                                  { key: 'anger', label: '😠 angry', color: '#ef4444' },
+                                  { key: 'surprise', label: '😲 surprise', color: '#f59e0b' },
+                                  { key: 'neutral', label: '😐 neutral', color: '#6b7280' },
+                                  { key: 'sassiness', label: '💅 sassy', color: '#ff2d6f' },
+                                ].map(({ key, label, color }) => {
+                                  const val = tripleAi.face?.emotions?.[key] || 0;
+                                  return (
+                                    <div key={key} className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[9px] w-14 shrink-0 truncate">{label}</span>
+                                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full" style={{ width: `${val}%`, background: color }} />
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {/* No face */}
-                              {!tripleAi.face?.hasFace && (
-                                <p className="text-[10px] text-white/40">no face detected</p>
-                              )}
+                                      <span className="text-[9px] text-white font-mono w-6 text-right">{val}%</span>
+                                    </div>
+                                  );
+                                })}
+                                {!tripleAi.face?.hasFace && (
+                                  <p className="text-[8px] text-white/30 mt-1">no face — showing defaults</p>
+                                )}
+                              </div>
 
                               {/* Vibe breakdown */}
                               {tripleAi.vibe?.hasVibe && tripleAi.vibe.scores && (
                                 <div>
-                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1">vibe breakdown</p>
+                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">vibe breakdown</p>
                                   {Object.entries(tripleAi.vibe.scores)
                                     .sort((a, b) => b[1] - a[1])
-                                    .slice(0, 5)
+                                    .slice(0, 6)
                                     .map(([label, score]) => (
                                       <div key={label} className="flex items-center gap-1.5 mb-1">
                                         <span className="text-[9px] text-white/60 w-20 truncate shrink-0">{label}</span>
@@ -534,9 +529,9 @@ export default function Home() {
                               {/* Objects */}
                               {tripleAi.objects?.hasObjects && (
                                 <div>
-                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1">objects</p>
+                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">objects</p>
                                   <div className="flex flex-wrap gap-1">
-                                    {tripleAi.objects.objects.slice(0, 5).map((obj, i) => (
+                                    {tripleAi.objects.objects.slice(0, 6).map((obj, i) => (
                                       <span key={i} className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white/5 text-white/70 border border-white/10">
                                         {obj.label} {obj.score}%
                                       </span>
@@ -545,9 +540,23 @@ export default function Home() {
                                 </div>
                               )}
 
+                              {/* Models run */}
+                              {tripleAi.models && tripleAi.models.length > 0 && (
+                                <div>
+                                  <p className="text-[9px] text-[var(--pink)] uppercase tracking-wider font-bold mb-1.5">models</p>
+                                  {tripleAi.models.map((m, i) => (
+                                    <div key={i} className="flex items-center gap-1.5 mb-0.5">
+                                      <span className={`w-1 h-1 rounded-full ${m.status === 'ok' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                      <span className="text-[8px] text-white/50 w-16 shrink-0">{m.name}</span>
+                                      <span className="text-[8px] text-white/70 truncate">{m.detail}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
                               {/* Summary */}
                               {tripleAi.summary && (
-                                <p className="text-[9px] text-white/40 leading-relaxed">{tripleAi.summary}</p>
+                                <p className="text-[8px] text-white/30 leading-relaxed border-t border-white/5 pt-2">{tripleAi.summary}</p>
                               )}
                             </div>
                           )}
