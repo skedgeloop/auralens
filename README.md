@@ -33,8 +33,6 @@ npm run dev
 # Open http://localhost:3000
 ```
 
-> ⚠️ **Windows note:** the folder on disk is `C:\All Saas` (lowercase "a"). npm/webpack are case-sensitive on module paths, so always run commands with `C:\All Saas`, not `C:\All SaaS`.
-
 ## Production Build
 
 ```bash
