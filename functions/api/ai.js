@@ -50,16 +50,31 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   try {
-    const { image, sample, src } = await request.json();
+    const { image, sample, src, edited } = await request.json();
     let cached = false;
     let result = null;
+    let editedResp = null;
 
     if (sample) {
       // Persistent sample cache — KV, server loads the image by URL
       const key = `sample:${sample}`;
-      const hit = await env.AURAS?.get(key, 'json');
+      const editKey = `edited:${sample}`;
+
+      // Store the auto-fixed thumbnail (saved state, never recomputed per visit)
+      if (edited) {
+        try { await env.AURAS.put(editKey, edited); } catch (e) { console.error('KV edited put failed:', e); }
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const [hit, editHit] = await Promise.all([
+        env.AURAS?.get(key, 'json'),
+        env.AURAS?.get(editKey),
+      ]);
+      editedResp = editHit || null;
       if (hit) {
-        return new Response(JSON.stringify({ ...hit, cached: true }), {
+        return new Response(JSON.stringify({ ...hit, cached: true, edited: editedResp }), {
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         });
       }
@@ -79,9 +94,7 @@ export const onRequestPost = async ({ request, env }) => {
       }
       result = await runAnalysis(await imageResp.blob(), env);
       if (result) {
-        try {
-          await env.AURAS.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 30 });
-        } catch (e) { console.error('KV put failed:', e); }
+        try { await env.AURAS.put(key, JSON.stringify(result)); } catch (e) { console.error('KV put failed:', e); }
       }
     } else {
       if (!image) {
@@ -111,7 +124,7 @@ export const onRequestPost = async ({ request, env }) => {
       });
     }
 
-    return new Response(JSON.stringify({ ...result, cached }), {
+    return new Response(JSON.stringify({ ...result, cached, edited: editedResp }), {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   } catch (err) {

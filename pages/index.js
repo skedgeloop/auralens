@@ -248,11 +248,15 @@ export default function Home() {
     }
   }, [showToast]);
 
-  // Pre-analyze samples once on landing: server results (KV-cached) + auto-fixed "after"
+  // Pre-analyze samples once on landing: server results (KV-cached) + auto-fixed "after".
+  // The auto-fixed thumbnails are SAVED in KV so they never recompute per visit.
   useEffect(() => {
     if (hasImage) return;
     let cancelled = false;
+
     SAMPLES.forEach(async (s) => {
+      // 1) Get analysis (KV-cached) — also returns the saved edited thumbnail if any
+      let savedEdited = null;
       try {
         const res = await fetch('/api/ai', {
           method: 'POST',
@@ -269,14 +273,27 @@ export default function Home() {
               cached: !!data.cached,
             },
           }));
+          savedEdited = data.edited || null;
         }
       } catch (err) { console.error('Sample pre-analyze failed:', s.name, err); }
 
-      // Auto-fixed "after" image (client-side enhance)
-      try {
-        const edited = await smartAutoEnhance(s.src);
-        if (!cancelled && edited) setSampleEdited((prev) => ({ ...prev, [s.name]: edited }));
-      } catch (err) { console.error('Sample enhance failed:', s.name, err); }
+      if (cancelled) return;
+
+      // 2) If KV has a saved edited thumbnail, use it (saved state, instant)
+      if (savedEdited) {
+        setSampleEdited((prev) => ({ ...prev, [s.name]: savedEdited }));
+        return;
+      }
+
+      // 3) Otherwise generate once + persist to KV for next time
+      const edited = await smartAutoEnhance(s.src);
+      if (cancelled || !edited) return;
+      setSampleEdited((prev) => ({ ...prev, [s.name]: edited }));
+      fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sample: s.name, edited }),
+      }).catch(() => {});
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -405,7 +422,7 @@ export default function Home() {
       {!hasImage ? (
         /* ===== Premium landing page ===== */
         <div className="flex-1 overflow-y-auto bg-[var(--bg)]">
-          <div className="w-full max-w-3xl mx-auto px-6 py-12 md:py-16">
+          <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-12 md:py-16">
             {/* Header */}
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-soft)] bg-[var(--pink-glow)] px-4 py-1.5 text-xs text-[var(--pink-dim)] mb-6">
@@ -430,7 +447,7 @@ export default function Home() {
                 <p className="type-caption mb-1">try now</p>
                 <h2 className="type-h3 text-white">pick a sample, watch it get cooked</h2>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {SAMPLES.map((s) => {
                   const edited = sampleEdited[s.name];
                   const res = sampleResults[s.name];
@@ -485,7 +502,7 @@ export default function Home() {
             </div>
 
             {/* Features */}
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
               {FEATURES.map((f) => (
                 <div key={f.title} className="panel panel-hover p-5 text-center rounded-xl">
                   <div className="w-10 h-10 rounded-lg bg-[var(--pink-glow)] border border-[var(--border-soft)] flex items-center justify-center mx-auto mb-3">
