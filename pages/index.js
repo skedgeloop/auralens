@@ -21,6 +21,7 @@ import {
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
 import { applyColorGrade, smartAutoEnhance } from '../src/lib/realAi';
+import SAMPLES from '../src/lib/samples';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 
@@ -186,6 +187,59 @@ export default function Home() {
     } catch (err) { console.error('Auto-enhance failed:', err); }
     finally { setApplying(false); }
   }, [historyIndex]);
+
+  // ---- Load a sample photo into the editor + analyze (so the AI popup shows) ----
+  const handleSampleSelect = useCallback(async (sample) => {
+    setOriginalImage(sample.src);
+    setEditHistory([]);
+    setHistoryIndex(-1);
+    setEditSuggestions([]);
+    setActiveFilter('none');
+    setFilterIntensity(100);
+    setAdjustments({ brightness: 0, contrast: 0, saturation: 0, temperature: 0, hue: 0, sharpness: 0, exposure: 0 });
+    setZoom(1);
+    setIsComparing(true);
+    setDisplayedImage(sample.src);
+    setActiveTab('ai');
+    setShowAiPanel(true);
+
+    setIsAnalyzing(true);
+    try {
+      const [analysisResult, tripleResult] = await Promise.allSettled([
+        analyzeImage(sample.src),
+        runTripleAnalysis(sample.src),
+      ]);
+      if (analysisResult.status === 'fulfilled' && analysisResult.value) {
+        setAiAnalysis(analysisResult.value);
+        const suggestions = analysisResult.value.suggestions || [];
+        setEditSuggestions(suggestions.map(s => ({
+          text: s.reason,
+          filter: s.action?.name || s.action,
+          reason: `Confidence: ${Math.round((s.confidence || 0.5) * 100)}%`,
+        })));
+      }
+      if (tripleResult.status === 'fulfilled') {
+        setTripleAi(tripleResult.value);
+        setAiTier(tripleResult.value.tier || 'pixel');
+      }
+    } catch (err) { console.error('Sample AI error:', err); }
+    finally {
+      setIsAnalyzing(false);
+      setAiAnalysisReady(true);
+      autoApplyEnhance(sample.src);
+    }
+  }, [showToast, autoApplyEnhance]);
+
+  // Auto-load the first sample on first visit so the editor + AI popup open
+  // immediately (matches the "goodversion" the user prefers).
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (didAutoLoad.current) return;
+    didAutoLoad.current = true;
+    const first = SAMPLES[0];
+    if (first) handleSampleSelect(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNewImage = useCallback(() => {
     setOriginalImage(null);
