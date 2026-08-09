@@ -2,8 +2,5 @@
   "name": "auralens",
   "pages_build_output_dir": "./out",
   "compatibility_date": "2026-01-01",
-  "ai": { "binding": "AI" },
-  "kv_namespaces": [
-    { "binding": "AURAS", "id": "65071936ee1d4728a7c0cabec29f08f2" }
-  ]
+  "ai": { "binding": "AI" }
 }

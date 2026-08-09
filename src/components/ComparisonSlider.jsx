@@ -63,13 +63,13 @@ export default function ComparisonSlider({ originalSrc, editedSrc, isComparing }
 
       {/* Divider line */}
       <div
-        className="absolute top-0 bottom-0 w-[2px] bg-[var(--pink)] shadow-[0_0_12px_var(--pink)] z-10 pointer-events-none"
+        className="absolute top-0 bottom-0 w-[2px] bg-white/80 z-10 pointer-events-none"
         style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
       />
 
       {/* Drag handle */}
       <div
-        className="absolute top-1/2 w-11 h-11 rounded-full bg-[var(--pink)] shadow-[0_4px_20px_-4px_var(--pink)] border border-white/20 flex items-center justify-center z-20 pointer-events-none"
+        className="absolute top-1/2 w-10 h-10 rounded-full bg-white shadow-2xl flex items-center justify-center z-20 pointer-events-none"
         style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round">
@@ -78,10 +78,10 @@ export default function ComparisonSlider({ originalSrc, editedSrc, isComparing }
       </div>
 
       {/* Labels */}
-      <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur text-[11px] font-bold text-white/90 uppercase tracking-wider z-10 pointer-events-none border border-white/10">
+      <div className="absolute top-3 left-3 px-2 py-1 rounded bg-black/70 text-[11px] font-bold text-white uppercase tracking-wider z-10 pointer-events-none">
         original
       </div>
-      <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[var(--pink)] text-[11px] font-bold text-black uppercase tracking-wider z-10 pointer-events-none shadow-[0_0_16px_-4px_var(--pink)]">
+      <div className="absolute top-3 right-3 px-2 py-1 rounded bg-[var(--pink)] text-[11px] font-bold text-black uppercase tracking-wider z-10 pointer-events-none">
         edited
       </div>
     </div>

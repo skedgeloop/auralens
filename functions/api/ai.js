@@ -23,19 +23,6 @@ function checkRateLimit(ip) {
   return record.count <= RATE_LIMIT;
 }
 
-// In-memory cache for user uploads (short TTL, per-instance)
-const uploadCache = new Map();
-const UPLOAD_TTL = 10 * 60 * 1000; // 10 min
-
-function fnv1a(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36);
-}
-
 export const onRequestOptions = async () => {
   return new Response(null, { headers: CORS_HEADERS });
 };
@@ -50,81 +37,43 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   try {
-    const { image, sample, src, edited } = await request.json();
-    let cached = false;
-    let result = null;
-    let editedResp = null;
-
-    if (sample) {
-      // Persistent sample cache — KV, server loads the image by URL
-      const key = `sample:${sample}`;
-      const editKey = `edited:${sample}`;
-
-      // Store the auto-fixed thumbnail (saved state, never recomputed per visit)
-      if (edited) {
-        try { await env.AURAS.put(editKey, edited); } catch (e) { console.error('KV edited put failed:', e); }
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const [hit, editHit] = await Promise.all([
-        env.AURAS?.get(key, 'json'),
-        env.AURAS?.get(editKey),
-      ]);
-      editedResp = editHit || null;
-      if (hit) {
-        return new Response(JSON.stringify({ ...hit, cached: true, edited: editedResp }), {
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-      if (!src) {
-        return new Response(JSON.stringify({ error: 'No sample src' }), {
-          status: 400,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-      const url = new URL(src, request.url).href;
-      const imageResp = await fetch(url);
-      if (!imageResp.ok) {
-        return new Response(JSON.stringify({ error: 'Sample image not found' }), {
-          status: 404,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-      result = await runAnalysis(await imageResp.blob(), env);
-      if (result) {
-        try { await env.AURAS.put(key, JSON.stringify(result)); } catch (e) { console.error('KV put failed:', e); }
-      }
-    } else {
-      if (!image) {
-        return new Response(JSON.stringify({ error: 'No image' }), {
-          status: 400,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-      }
-      const imageBlob = base64ToBlob(image);
-      // User upload — in-memory TTL cache
-      const hash = fnv1a(image);
-      const now = Date.now();
-      const hit = uploadCache.get(hash);
-      if (hit && now - hit.ts < UPLOAD_TTL) {
-        cached = true;
-        result = hit.value;
-      } else {
-        result = await runAnalysis(imageBlob, env);
-        if (result) uploadCache.set(hash, { value: result, ts: now });
-      }
-    }
-
-    if (!result) {
-      return new Response(JSON.stringify({ error: 'Analysis failed' }), {
-        status: 500,
+    const { image } = await request.json();
+    if (!image) {
+      return new Response(JSON.stringify({ error: 'No image' }), {
+        status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
 
-    return new Response(JSON.stringify({ ...result, cached, edited: editedResp }), {
+    const imageBlob = base64ToBlob(image);
+
+    // Run all analyses in parallel
+    const [emotionResult, vibeResult, objectResult] = await Promise.allSettled([
+      analyzeEmotion(imageBlob, env),
+      analyzeVibe(imageBlob, env),
+      analyzeObjects(imageBlob),
+    ]);
+
+    const emotion = emotionResult.status === 'fulfilled' ? emotionResult.value : null;
+    const vibe = vibeResult.status === 'fulfilled' ? vibeResult.value : null;
+    const objects = objectResult.status === 'fulfilled' ? objectResult.value : null;
+
+    // DETR found a real person/face but CLIP read no expression —
+    // merge the person's box in so the client still knows where the face is.
+    const person = objects?.persons?.[0];
+    if (person && emotion && !emotion.faceBox) {
+      emotion.faceBox = person.faceBox;
+      emotion.confidence = person.confidence;
+      emotion.faceCount = Math.max(emotion.faceCount, objects.persons.length);
+      emotion.hasFace = emotion.hasFace || true;
+    }
+
+    return new Response(JSON.stringify({
+      emotion,
+      vibe,
+      objects,
+      timestamp: Date.now(),
+    }), {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   } catch (err) {
@@ -134,33 +83,6 @@ export const onRequestPost = async ({ request, env }) => {
     });
   }
 };
-
-/**
- * Run all analyses in parallel and merge a DETR person box into the emotion result.
- */
-async function runAnalysis(imageBlob, env) {
-  const [emotionResult, vibeResult, objectResult] = await Promise.allSettled([
-    analyzeEmotion(imageBlob, env),
-    analyzeVibe(imageBlob, env),
-    analyzeObjects(imageBlob),
-  ]);
-
-  const emotion = emotionResult.status === 'fulfilled' ? emotionResult.value : null;
-  const vibe = vibeResult.status === 'fulfilled' ? vibeResult.value : null;
-  const objects = objectResult.status === 'fulfilled' ? objectResult.value : null;
-
-  // DETR found a real person/face but CLIP read no expression —
-  // merge the person's box in so the client still knows where the face is.
-  const person = objects?.persons?.[0];
-  if (person && emotion && !emotion.faceBox) {
-    emotion.faceBox = person.faceBox;
-    emotion.confidence = person.confidence;
-    emotion.faceCount = Math.max(emotion.faceCount, objects.persons.length);
-    emotion.hasFace = emotion.hasFace || true;
-  }
-
-  return { emotion, vibe, objects, timestamp: Date.now() };
-}
 
 /**
  * Emotion analysis using CLIP zero-shot classification.

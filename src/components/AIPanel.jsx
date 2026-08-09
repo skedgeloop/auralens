@@ -108,8 +108,8 @@ export default function AIPanel({
         {!isAnalyzing && aiTier && aiTier !== 'loading' && (
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className={`w-1.5 h-1.5 rounded-full ${
-              aiTier === 'server' ? 'bg-pink' :
-              aiTier === 'browser' ? 'bg-pink-dim' : 'bg-[var(--text-dim)]'
+              aiTier === 'server' ? 'bg-emerald-400' :
+              aiTier === 'browser' ? 'bg-amber-400' : 'bg-[var(--text-dim)]'
             }`} />
             <span className="text-[9px] text-[var(--text-dim)] uppercase tracking-wider">
               {aiTier === 'server' ? 'cloud ai' :
@@ -155,11 +155,11 @@ export default function AIPanel({
               {tripleAi?.face?.hasFace ? (() => {
                 const emotions = tripleAi.face.emotions || {};
                 const list = [
-                  { label: 'Happiness', value: emotions.happiness, color: '#ff6b9d' },
-                  { label: 'Sadness', value: emotions.sadness, color: '#ffa9c4' },
-                  { label: 'Anger', value: emotions.anger, color: '#ff2d6f' },
-                  { label: 'Surprise', value: emotions.surprise, color: '#ff8fb5' },
-                  { label: 'Neutral', value: emotions.neutral, color: '#d81b57' },
+                  { label: 'Happiness', value: emotions.happiness, color: '#22c55e' },
+                  { label: 'Sadness', value: emotions.sadness, color: '#3b82f6' },
+                  { label: 'Anger', value: emotions.anger, color: '#ef4444' },
+                  { label: 'Surprise', value: emotions.surprise, color: '#f59e0b' },
+                  { label: 'Neutral', value: emotions.neutral, color: '#6b7280' },
                 ].filter((item) => item.value > 0);
                 return list.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
@@ -274,9 +274,9 @@ export default function AIPanel({
                     <div><div className="text-[11px] text-white font-bold capitalize">{analysis.colorProfile.dominantChannel}</div><div className="text-[9px] text-[var(--text-dim)]">dominant</div></div>
                   </div>
                   <div className="mt-1.5 flex gap-1 h-1.5">
-                    <div className="flex-1 rounded-full bg-[var(--pink)]" style={{ opacity: 0.3 + analysis.colorProfile.avgR / 255 * 0.7 }} />
-                    <div className="flex-1 rounded-full bg-[var(--pink-dim)]" style={{ opacity: 0.3 + analysis.colorProfile.avgG / 255 * 0.7 }} />
-                    <div className="flex-1 rounded-full bg-[var(--pink-light)]" style={{ opacity: 0.3 + analysis.colorProfile.avgB / 255 * 0.7 }} />
+                    <div className="flex-1 rounded-full bg-red-500" style={{ opacity: 0.3 + analysis.colorProfile.avgR / 255 * 0.7 }} />
+                    <div className="flex-1 rounded-full bg-green-500" style={{ opacity: 0.3 + analysis.colorProfile.avgG / 255 * 0.7 }} />
+                    <div className="flex-1 rounded-full bg-blue-500" style={{ opacity: 0.3 + analysis.colorProfile.avgB / 255 * 0.7 }} />
                   </div>
                   <div className="mt-1 flex gap-3 text-[10px] text-[var(--text-dim)] font-mono">
                     <span>R: {Math.round(analysis.colorProfile.avgR)}</span>
