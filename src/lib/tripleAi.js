@@ -57,12 +57,25 @@ export const runTripleAnalysis = async (imageSrc) => {
     results.models.push({ name: 'COCO-SSD', status: 'failed', detail: e.message.substring(0, 50) });
   }
 
-  // === COMBINE RESULTS — best face from any model ===
-  const faceResults = [faceApiResult, blazefaceResult].filter(r => r?.hasFace);
-  if (faceResults.length > 0) {
-    // Merge emotions from best result
-    results.face = faceResults[0]; // face-api has best emotions
-  } else if (!results.face?.hasFace) {
+  // === COMBINE RESULTS — best face + emotions from any model ===
+  // face-api is most proven on drawn faces; server CLIP emotion is real;
+  // blazeface only supplies a face box. Prefer in that order.
+  const serverFace = results.face; // real CLIP emotion from server
+  const serverHasEmotions = serverFace?.hasFace && serverFace.emotions &&
+    Object.keys(serverFace.emotions).length > 0;
+  const faceSource = faceApiResult?.hasFace ? faceApiResult
+    : serverHasEmotions ? serverFace
+    : blazefaceResult?.hasFace ? blazefaceResult
+    : null;
+
+  if (faceSource) {
+    results.face = { ...faceSource };
+    // Blazeface knows where the face is even when emotions come from elsewhere
+    if (blazefaceResult?.hasFace && !results.face.faceBox) {
+      results.face.faceBox = blazefaceResult.faceBox;
+      results.face.faceCount = Math.max(results.face.faceCount || 1, blazefaceResult.faceCount);
+    }
+  } else {
     results.face = { hasFace: false, emotions: {}, faceCount: 0 };
   }
 
@@ -176,14 +189,8 @@ async function blazefaceDetect(imageSrc) {
       height: Math.round(bottomRight[1] - topLeft[1]),
     },
     confidence: Math.round((pred.probability?.[0] || 0.9) * 100),
-    emotions: {
-      happiness: Math.round(Math.random() * 30 + 45),
-      sadness: Math.round(Math.random() * 20 + 10),
-      anger: Math.round(Math.random() * 15 + 5),
-      surprise: Math.round(Math.random() * 25 + 15),
-      neutral: Math.round(Math.random() * 20 + 25),
-      sassiness: Math.round(Math.random() * 40 + 25),
-    },
+    // blazeface only detects boxes — no real emotions. Empty on purpose.
+    emotions: {},
   };
 }
 
@@ -213,18 +220,27 @@ async function cocoSsdDetect(imageSrc) {
 // ═══════════════════════════════════════════
 function generateVibeFromResults(face, objects) {
   if (face?.hasFace) {
-    if (face.emotions.happiness > 60) return { topLabel: 'handsome', topScore: face.emotions.happiness, scores: { handsome: face.emotions.happiness }, hasVibe: true };
-    if (face.emotions.sassiness > 50) return { topLabel: 'hot', topScore: face.emotions.sassiness, scores: { hot: face.emotions.sassiness }, hasVibe: true };
-    if (face.emotions.anger > 40) return { topLabel: 'alpha energy', topScore: face.emotions.anger, scores: { 'alpha energy': face.emotions.anger }, hasVibe: true };
-    if (face.emotions.sadness > 40) return { topLabel: 'mysterious', topScore: face.emotions.sadness, scores: { mysterious: face.emotions.sadness }, hasVibe: true };
-    return { topLabel: 'aesthetic', topScore: 50, scores: { aesthetic: 50 }, hasVibe: true };
+    const e = face.emotions || {};
+    if (e.happiness > 60) return { topLabel: 'handsome', topScore: e.happiness, scores: { handsome: e.happiness }, hasVibe: true };
+    if (e.sassiness > 50) return { topLabel: 'hot', topScore: e.sassiness, scores: { hot: e.sassiness }, hasVibe: true };
+    if (e.anger > 40) return { topLabel: 'alpha energy', topScore: e.anger, scores: { 'alpha energy': e.anger }, hasVibe: true };
+    if (e.sadness > 40) return { topLabel: 'mysterious', topScore: e.sadness, scores: { mysterious: e.sadness }, hasVibe: true };
+    // Real neutral signal — never fabricate a score
+    if (e.neutral > 0) return { topLabel: 'aesthetic', topScore: e.neutral, scores: { aesthetic: e.neutral }, hasVibe: true };
+    return { hasVibe: false };
   }
   if (objects?.hasObjects) {
     const labels = objects.objects.map(o => o.label);
-    if (labels.some(l => ['cat', 'dog'].includes(l))) return { topLabel: 'cute', topScore: 70, scores: { cute: 70 }, hasVibe: true };
-    if (labels.some(l => ['car', 'truck'].includes(l))) return { topLabel: 'aesthetic', topScore: 65, scores: { aesthetic: 65 }, hasVibe: true };
+    if (labels.some(l => ['cat', 'dog'].includes(l))) {
+      const s = Math.round(Math.max(...objects.objects.filter(o => ['cat', 'dog'].includes(o.label)).map(o => o.score)));
+      return { topLabel: 'cute', topScore: s, scores: { cute: s }, hasVibe: true };
+    }
+    if (labels.some(l => ['car', 'truck'].includes(l))) {
+      const s = Math.round(Math.max(...objects.objects.filter(o => ['car', 'truck'].includes(o.label)).map(o => o.score)));
+      return { topLabel: 'aesthetic', topScore: s, scores: { aesthetic: s }, hasVibe: true };
+    }
   }
-  return { topLabel: 'aesthetic', topScore: 50, scores: { aesthetic: 50 }, hasVibe: true };
+  return { hasVibe: false };
 }
 
 async function pixelVibe(imageSrc) {
@@ -238,10 +254,17 @@ async function pixelVibe(imageSrc) {
   for (let i = 0; i < d.length; i += 4) { totalR += d[i]; totalG += d[i+1]; totalB += d[i+2]; }
   const count = d.length / 4;
   const warmth = (totalR / count - totalB / count) / 255;
-  let label = 'aesthetic';
-  if (warmth > 0.15) label = 'gorgeous';
-  else if (warmth < -0.1) label = 'cool vibes';
-  return { topLabel: label, topScore: Math.round(Math.abs(warmth) * 100 + 30), scores: { [label]: Math.round(Math.abs(warmth) * 100 + 30) }, hasVibe: true };
+  // Score derives from the measured warmth, never fabricated
+  const warmthScore = (v) => Math.min(95, Math.round(Math.abs(v) * 200 + 55));
+  if (warmth > 0.15) {
+    const s = warmthScore(warmth);
+    return { topLabel: 'gorgeous', topScore: s, scores: { gorgeous: s }, hasVibe: true };
+  }
+  if (warmth < -0.1) {
+    const s = warmthScore(warmth);
+    return { topLabel: 'cool vibes', topScore: s, scores: { 'cool vibes': s }, hasVibe: true };
+  }
+  return { hasVibe: false };
 }
 
 function generateSummary(results) {

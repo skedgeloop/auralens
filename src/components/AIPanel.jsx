@@ -4,7 +4,7 @@ import {
   FiArrowRight, FiCheck, FiLoader, FiMessageSquare, FiSmile,
 } from 'react-icons/fi';
 import { analyzeImage, processNaturalLanguage } from '../lib/aiEngine';
-import { runTripleAnalysis, runPixelAnalysis } from '../lib/tripleAi';
+import { runTripleAnalysis } from '../lib/tripleAi';
 import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
 
 export default function AIPanel({
@@ -36,12 +36,6 @@ export default function AIPanel({
         if (tripleResult.status === 'fulfilled') {
           setTripleAi(tripleResult.value);
           setAiTier(tripleResult.value.tier || 'pixel');
-          // If pixel fallback, run async pixel analysis for better results
-          if (tripleResult.value._pending) {
-            runPixelAnalysis(imageSrc).then((pixelResult) => {
-              if (!cancelled) setTripleAi(pixelResult);
-            });
-          }
         }
         onAnalysisComplete?.(imgAnalysis.value);
       }
@@ -150,55 +144,57 @@ export default function AIPanel({
               </div>
             )}
 
-            {/* === FACE EMOTIONS (face-api) === */}
+            {/* === FACE EMOTIONS (server + face-api) === */}
             <div className="panel p-3">
               <div className="flex items-center gap-2 mb-2">
                 <FiSmile className="w-3.5 h-3.5 text-[var(--pink)]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">face emotions</span>
-                <span className="text-[9px] text-[var(--text-dim)] opacity-50">face-api</span>
+                <span className="text-[9px] text-[var(--text-dim)] opacity-50">server + face-api</span>
               </div>
 
-              {tripleAi?.face?.hasFace ? (
-                <div className="flex flex-col gap-1.5">
-                  {[
-                    { label: 'Happiness', value: tripleAi.face.happiness, color: '#22c55e' },
-                    { label: 'Sadness', value: tripleAi.face.sadness, color: '#3b82f6' },
-                    { label: 'Anger', value: tripleAi.face.anger, color: '#ef4444' },
-                    { label: 'Surprise', value: tripleAi.face.surprise, color: '#f59e0b' },
-                    { label: 'Neutral', value: tripleAi.face.neutral, color: '#6b7280' },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center gap-2">
-                      <span className="text-[10px] text-[var(--text-dim)] w-14 shrink-0">{item.label}</span>
-                      <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${item.value}%`, background: item.color }} />
+              {tripleAi?.face?.hasFace ? (() => {
+                const emotions = tripleAi.face.emotions || {};
+                const list = [
+                  { label: 'Happiness', value: emotions.happiness, color: '#22c55e' },
+                  { label: 'Sadness', value: emotions.sadness, color: '#3b82f6' },
+                  { label: 'Anger', value: emotions.anger, color: '#ef4444' },
+                  { label: 'Surprise', value: emotions.surprise, color: '#f59e0b' },
+                  { label: 'Neutral', value: emotions.neutral, color: '#6b7280' },
+                ].filter((item) => item.value > 0);
+                return list.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    {list.map((item) => (
+                      <div key={item.label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-[var(--text-dim)] w-14 shrink-0">{item.label}</span>
+                        <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${item.value}%`, background: item.color }} />
+                        </div>
+                        <span className="text-[10px] text-white font-mono w-7 text-right">{item.value}%</span>
                       </div>
-                      <span className="text-[10px] text-white font-mono w-7 text-right">{item.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-[var(--text-dim)]">emotions not readable on this face</p>
+                );
+              })() : (
                 <p className="text-[11px] text-[var(--text-dim)]">no face detected</p>
               )}
             </div>
 
-            {/* === SASSINESS (MediaPipe blendshapes) === */}
+            {/* === SASSINESS (server + face-api) === */}
             <div className="panel p-3">
               <div className="flex items-center gap-2 mb-2">
                 <FiZap className="w-3.5 h-3.5 text-[var(--pink)]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">sassiness</span>
-                <span className="text-[9px] text-[var(--text-dim)] opacity-50">mediapipe</span>
+                <span className="text-[9px] text-[var(--text-dim)] opacity-50">server + face-api</span>
               </div>
               {tripleAi?.face?.hasFace ? (
                 <div>
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl font-bold text-[var(--pink)]">{tripleAi.face.sassiness}%</span>
+                    <span className="text-2xl font-bold text-[var(--pink)]">{tripleAi.face.emotions?.sassiness || 0}%</span>
                     <div className="flex-1 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                      <div className="h-full bg-[var(--pink)] rounded-full" style={{ width: `${tripleAi.face.sassiness}%` }} />
+                      <div className="h-full bg-[var(--pink)] rounded-full" style={{ width: `${tripleAi.face.emotions?.sassiness || 0}%` }} />
                     </div>
-                  </div>
-                  <div className="mt-1.5 flex gap-3 text-[10px] text-[var(--text-dim)]">
-                    <span>eye ratio: {tripleAi.face.eyeRatio}</span>
-                    <span>mouth asym: {tripleAi.face.mouthAsymmetry}</span>
                   </div>
                 </div>
               ) : (
