@@ -158,18 +158,18 @@ async function analyzeEmotion(imageBlob, env) {
 const EMOTION_LABELS = ['happy', 'sad', 'angry', 'surprised', 'neutral', 'smug'];
 
 /**
- * Emotion via Workers AI LLaVA — real scores for drawn faces too.
+ * Emotion via Workers AI Llama 3.2 vision — real scores for drawn faces too.
  */
 async function analyzeEmotionWorkersAI(imageBlob, env) {
   try {
-    // LLaVA takes the image as a base64 string (without data: prefix)
+    // Llama 3.2 vision takes the image as base64 (without data: prefix)
     const dataUrl = await blobToBase64(imageBlob);
     const image = dataUrl.slice(dataUrl.indexOf(',') + 1);
-    const out = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+    const out = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
       image,
       prompt: `Describe the facial expression in this image with exactly one of these words: happy, sad, angry, surprised, neutral, smug. Reply with the single word.`,
     });
-    const text = (out?.description || '').toLowerCase().trim();
+    const text = (out?.response || '').toLowerCase().trim();
     const emotions = {
       happiness: 0, sadness: 0, anger: 0, surprise: 0, neutral: 0, sassiness: 0,
     };
@@ -209,7 +209,7 @@ const VIBE_LABELS = [
 /**
  * Vibe classification using zero-shot image classification (CLIP).
  * openai/clip-vit-base-patch32 is the canonical serverless-served CLIP.
- * Falls back to Workers AI LLaVA when Hugging Face is unreachable.
+ * Falls back to Workers AI Llama 3.2 vision when Hugging Face is unreachable.
  */
 async function analyzeVibe(imageBlob, env) {
   try {
@@ -229,7 +229,7 @@ async function analyzeVibe(imageBlob, env) {
     );
 
     if (!response.ok) {
-      // Hugging Face unreachable — try Workers AI LLaVA instead
+      // Hugging Face unreachable — try Workers AI Llama 3.2 vision instead
       return await analyzeVibeWorkersAI(imageBlob, env);
     }
 
@@ -254,19 +254,19 @@ async function analyzeVibe(imageBlob, env) {
 }
 
 /**
- * Vibe + emotion via Workers AI LLaVA vision model.
+ * Vibe + emotion via Workers AI Llama 3.2 vision model.
  * Runs on Cloudflare's own network — no external DNS dependency.
  */
 async function analyzeVibeWorkersAI(imageBlob, env) {
   try {
-    // LLaVA takes the image as a base64 string (without data: prefix)
+    // Llama 3.2 vision takes the image as base64 (without data: prefix)
     const dataUrl = await blobToBase64(imageBlob);
     const image = dataUrl.slice(dataUrl.indexOf(',') + 1);
-    const out = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+    const out = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
       image,
       prompt: `Pick ONE vibe label from this exact list that best fits the image: ${VIBE_LABELS.join(', ')}. Reply with the label only.`,
     });
-    const text = (out?.description || '').trim().toLowerCase();
+    const text = (out?.response || '').trim().toLowerCase();
     const scores = {};
     let topLabel = null;
     let topScore = 0;
@@ -285,7 +285,7 @@ async function analyzeVibeWorkersAI(imageBlob, env) {
     }
     return { topLabel, topScore, scores, hasVibe: true };
   } catch (err) {
-    console.error('Workers AI LLaVA error:', err);
+    console.error('Workers AI Llama vision error:', err);
     return { hasVibe: false };
   }
 }
