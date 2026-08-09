@@ -100,16 +100,14 @@ export default {
 async function analyzeEmotion(imageBlob) {
   try {
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/xenova/clip-vit-base-patch32',
+      'https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputs: {
-            image: await blobToBase64(imageBlob),
-            parameters: {
-              candidate_labels: ['happy', 'sad', 'angry', 'surprised', 'neutral', 'smug'],
-            },
+          inputs: await blobToBase64(imageBlob),
+          parameters: {
+            candidate_labels: ['happy', 'sad', 'angry', 'surprised', 'neutral', 'smug'],
           },
         }),
       }
@@ -159,28 +157,26 @@ async function analyzeEmotion(imageBlob) {
 
 /**
  * Vibe classification using zero-shot image classification (CLIP).
- * Uses Xenova/clip-vit-base-patch32 which supports zero-shot classification.
+ * openai/clip-vit-base-patch32 is the canonical serverless-served CLIP.
  */
 async function analyzeVibe(imageBlob) {
   try {
     // Use CLIP for zero-shot image classification
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/xenova/clip-vit-base-patch32',
+      'https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputs: {
-            image: await blobToBase64(imageBlob),
-            parameters: {
-              candidate_labels: [
-                'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
-                'alpha energy', 'main character', 'hot', 'aesthetic',
-                'iconic', 'legendary', 'dark vibes', 'soft vibes',
-                'chaotic energy', 'elegant', 'classy', 'boss energy',
-                'dreamy', 'ethereal', 'playful', 'mysterious',
-              ],
-            },
+          inputs: await blobToBase64(imageBlob),
+          parameters: {
+            candidate_labels: [
+              'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
+              'alpha energy', 'main character', 'hot', 'aesthetic',
+              'iconic', 'legendary', 'dark vibes', 'soft vibes',
+              'chaotic energy', 'elegant', 'classy', 'boss energy',
+              'dreamy', 'ethereal', 'playful', 'mysterious',
+            ],
           },
         }),
       }
