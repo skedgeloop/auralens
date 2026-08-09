@@ -4,6 +4,7 @@ import {
   FiArrowRight, FiCheck, FiLoader, FiMessageSquare,
 } from 'react-icons/fi';
 import { analyzeImage, processNaturalLanguage } from '../lib/aiEngine';
+import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
 
 const MOOD_LABELS = {
   'warm-vibrant': { label: 'warm & poppin', color: '#ff2d6f' },
@@ -25,6 +26,8 @@ export default function AIPanel({
   const [nlResult, setNlResult] = useState(null);
   const [appliedSuggestions, setAppliedSuggestions] = useState(new Set());
   const [activeSection, setActiveSection] = useState('insights');
+  const [blurLoading, setBlurLoading] = useState(false);
+  const [enhanceLoading, setEnhanceLoading] = useState(false);
 
   useEffect(() => {
     if (!imageSrc) { setAnalysis(null); return; }
@@ -47,6 +50,32 @@ export default function AIPanel({
     setAppliedSuggestions((prev) => new Set([...prev, index]));
     onApplySuggestion?.(suggestion);
   }, [onApplySuggestion]);
+
+  const handleBackgroundBlur = useCallback(async () => {
+    if (!imageSrc) return;
+    setBlurLoading(true);
+    try {
+      const blurred = await applyBackgroundBlur(imageSrc, 12);
+      onNaturalLanguage?.([{ type: 'apply-image', image: blurred, reason: 'Background blurred using AI segmentation' }]);
+    } catch (err) {
+      console.error('Background blur failed:', err);
+    } finally {
+      setBlurLoading(false);
+    }
+  }, [imageSrc, onNaturalLanguage]);
+
+  const handleSmartEnhance = useCallback(async () => {
+    if (!imageSrc) return;
+    setEnhanceLoading(true);
+    try {
+      const enhanced = await smartAutoEnhance(imageSrc);
+      onNaturalLanguage?.([{ type: 'apply-image', image: enhanced, reason: 'Smart enhanced with auto white balance + contrast' }]);
+    } catch (err) {
+      console.error('Smart enhance failed:', err);
+    } finally {
+      setEnhanceLoading(false);
+    }
+  }, [imageSrc, onNaturalLanguage]);
 
   if (!imageSrc) return null;
 
@@ -148,11 +177,32 @@ export default function AIPanel({
 
         {activeSection === 'enhance' && analysis && !isAnalyzing && (
           <div className="flex flex-col gap-3">
-            <button onClick={() => analysis?.autoEnhance && onAutoEnhance?.(analysis.autoEnhance)}
+            {/* Real AI features */}
+            <button onClick={handleSmartEnhance} disabled={enhanceLoading}
               className="btn btn-pink w-full py-3 text-sm">
-              <FiZap className="w-4 h-4" /> auto-fix everything
+              {enhanceLoading ? (
+                <><span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> enhancing...</>
+              ) : (
+                <><FiZap className="w-4 h-4" /> smart enhance</>
+              )}
             </button>
-            <p className="text-[11px] text-[var(--text-dim)] text-center">one click. AI does the rest. seriously.</p>
+            <p className="text-[11px] text-[var(--text-dim)] text-center">auto white balance + contrast stretch + saturation</p>
+
+            <button onClick={handleBackgroundBlur} disabled={blurLoading}
+              className="btn btn-dark w-full py-3 text-sm">
+              {blurLoading ? (
+                <><span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> detecting person...</>
+              ) : (
+                <><FiEye className="w-4 h-4" /> blur background</>
+              )}
+            </button>
+            <p className="text-[11px] text-[var(--text-dim)] text-center">neural network finds the person, blurs everything else</p>
+
+            <button onClick={() => analysis?.autoEnhance && onAutoEnhance?.(analysis.autoEnhance)}
+              className="btn btn-dark w-full py-3 text-sm">
+              <FiMaximize2 className="w-4 h-4" /> auto-fix sliders
+            </button>
+            <p className="text-[11px] text-[var(--text-dim)] text-center">adjusts brightness/contrast/sat from histogram analysis</p>
 
             {analysis.suggestions.length > 0 && (
               <div>

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tensorflow-models/body-segmentation": "^1.0.2",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.10.0",
     "@tensorflow/tfjs-converter": "^4.10.0",

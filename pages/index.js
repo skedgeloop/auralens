@@ -550,9 +550,15 @@ export default function Home() {
                         handleFilterSelect(action.name);
                       } else if (action.type === 'auto-enhance' && aiAnalysis?.autoEnhance) {
                         setAdjustments(aiAnalysis.autoEnhance);
+                      } else if (action.type === 'apply-image' && action.image) {
+                        // Apply AI-generated image directly (background blur, smart enhance)
+                        pushSnapshot(action.image, action.reason || 'AI edit');
+                        showToast(action.reason || 'AI edit applied', 'success');
                       }
                     });
-                    showToast('Applied AI edits', 'success');
+                    if (!actions.some(a => a.type === 'apply-image')) {
+                      showToast('Applied AI edits', 'success');
+                    }
                   }}
                   onAnalysisComplete={(analysis) => setAiAnalysis(analysis)}
                 />
