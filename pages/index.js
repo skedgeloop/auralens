@@ -164,7 +164,14 @@ export default function Home() {
         if (tripleResult.status === 'fulfilled') {
           setTripleAi(tripleResult.value);
           setAiTier(tripleResult.value.tier || 'pixel');
-          if (tripleResult.value.objects?.objects) {
+          // Add face box from face-api/blazeface if detected
+          if (tripleResult.value.face?.hasFace && tripleResult.value.face.faceBox) {
+            const fb = tripleResult.value.face.faceBox;
+            setDetectedObjects([{
+              class: 'face', score: tripleResult.value.face.confidence / 100 || 0.9,
+              bbox: [fb.x, fb.y, fb.width, fb.height],
+            }]);
+          } else if (tripleResult.value.objects?.objects) {
             setDetectedObjects(tripleResult.value.objects.objects.map(o => ({
               class: o.label, score: o.score / 100,
               bbox: [0, 0, 100, 100],

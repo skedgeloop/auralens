@@ -124,12 +124,15 @@ async function faceApiDetect(imageSrc) {
   if (!detection) return { hasFace: false, emotions: {}, faceCount: 0 };
 
   const expr = detection.expressions;
+  const box = detection.detection.box;
   const mouth = detection.landmarks.getMouth();
   const mouthAsymmetry = Math.abs(mouth[0].y - mouth[6].y);
 
   return {
     hasFace: true,
     faceCount: 1,
+    faceBox: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) },
+    confidence: Math.round(detection.detection.score * 100),
     emotions: {
       happiness: Math.round((expr.happy || 0) * 100),
       sadness: Math.round((expr.sad || 0) * 100),
@@ -159,9 +162,20 @@ async function blazefaceDetect(imageSrc) {
 
   if (!predictions || predictions.length === 0) return { hasFace: false, emotions: {}, faceCount: 0 };
 
+  const pred = predictions[0];
+  const topLeft = pred.topLeft;
+  const bottomRight = pred.bottomRight;
+
   return {
     hasFace: true,
     faceCount: predictions.length,
+    faceBox: {
+      x: Math.round(topLeft[0]),
+      y: Math.round(topLeft[1]),
+      width: Math.round(bottomRight[0] - topLeft[0]),
+      height: Math.round(bottomRight[1] - topLeft[1]),
+    },
+    confidence: Math.round((pred.probability?.[0] || 0.9) * 100),
     emotions: {
       happiness: Math.round(Math.random() * 30 + 45),
       sadness: Math.round(Math.random() * 20 + 10),
