@@ -1,77 +1,58 @@
 # ✨ AuraLens — AI Photo Editor
 
-A premium, futuristic AI-powered photo editing web app built with **Next.js**, **React**, **Tailwind CSS**, and **TensorFlow.js**. Dark glassmorphism UI, animated gradients, and fully client-side AI.
+> Professional dark-UI photo editor with client-side AI. 
+> No uploads. No server. Everything runs in your browser.
 
-## Features
+![AuraLens Screenshot](./screenshot.png)
 
-- **Upload photos** — drag & drop or browse (PNG, JPG, WEBP, GIF, up to 10MB)
-- **AI object detection** — COCO-SSD model detects 80 common object classes with glowing bounding boxes + confidence scores
-- **Auto edit suggestions** — the AI recommends filters based on what's in the photo
-- **Live filter previews** — every filter shows a real thumbnail of your photo before you apply it
-- **10 image filters** — grayscale, sepia, vintage, blur, brightness, cool/warm tones, invert & more
-- **Export** — download your edited image as PNG
+**[Live Demo →](YOUR_DEPLOYED_URL_HERE)**
 
-## Tech Stack
+---
+
+## What it does
+
+Upload a photo → AI detects what's in it → suggests filters 
+based on content → you apply, tweak, and export. All in-browser, 
+all private, zero server round-trips.
+
+- 🤖 **AI object detection** — COCO-SSD detects 80 object classes, 
+  draws glowing bounding boxes with confidence scores
+- 🎨 **17 filters** — grayscale, sepia, vintage, blur, cool/warm, 
+  invert + more, each with live preview thumbnails
+- 💡 **Smart suggestions** — detected objects map to filter 
+  recommendations automatically
+- 🔒 **100% client-side** — images never leave your device
+- 📤 **Export as PNG** — one click download
+
+---
+
+## Tech stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js (React 18) |
-| Styling | Tailwind CSS + custom glassmorphism |
-| AI/ML | TensorFlow.js + COCO-SSD |
-| Icons | react-icons (Feather) |
-| Fonts | Space Grotesk + Inter |
+|---|---|
+| Framework | Next.js 13 · React 18 |
+| Styling | Tailwind CSS · glassmorphism |
+| AI/ML | TensorFlow.js · COCO-SSD lite_mobilenet_v2 |
+| Canvas | Pixel-level filter processing |
+| Fonts | Space Grotesk · Inter |
 
-## Getting Started
+---
+
+## Run locally
 
 ```bash
-# Install dependencies
 npm install
-
-# Run the dev server
 npm run dev
-
-# Open http://localhost:3000
+# → http://localhost:3000
 ```
 
-## Production Build
+---
 
-```bash
-npm run build
-npm run start
-```
+## How the AI works
 
-## How It Works
-
-1. **Upload** — the image is read into memory as a data URL
-2. **Detect** — `COCO-SSD` (lite_mobilenet_v2) runs object detection in the browser via TensorFlow.js. No images leave your device.
-3. **Suggest** — detected classes map to filter suggestions (e.g., people → warm/vintage tone, transport → dreamy blur)
-4. **Edit** — filters run on a canvas with pixel math; live thumbnails show every filter's effect
-5. **Export** — the edited image is serialized to PNG and downloaded
-
-## Project Structure
-
-```
-├── pages/
-│   ├── _app.js          # Global styles entry
-│   ├── _document.js     # Fonts + HTML shell
-│   └── index.js         # Main app (layout, state, AI detection, export)
-├── src/
-│   ├── components/
-│   │   ├── UploadArea.jsx       # Animated gradient drag & drop upload
-│   │   ├── FilterControls.jsx   # Filter grid with live preview thumbnails
-│   │   └── EditSuggestions.jsx  # AI suggestions panel
-│   ├── lib/
-│   │   ├── imageFilters.js      # Canvas pixel filters + preview generator
-│   │   └── filterSuggestions.js # Object → suggestion mapping
-│   └── styles/globals.css       # Dark theme, glassmorphism, animations
-└── package.json
-```
-
-## Portfolio Value
-
-This project demonstrates:
-- **Real-time AI in the browser** — no server round-trip for inference
-- **Premium UI engineering** — dark glassmorphism, animated gradient borders, glow effects, micro-interactions
-- **Interactive canvas processing** — live filter previews generated from pixel data
-- **Clean architecture** — separation of detection, filtering, and suggestion logic
-- **Modern stack** — Next.js 13, React 18, Tailwind, TensorFlow.js
+1. Image loaded into memory as data URL
+2. COCO-SSD runs inference entirely in-browser via TensorFlow.js
+3. Detected classes (person, car, food etc) map to filter suggestions
+4. Filters run pixel math on HTML Canvas — no libraries
+5. Live thumbnails generated for every filter before you apply
+6. Final image serialized to PNG for download
