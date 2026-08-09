@@ -9,7 +9,7 @@ import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
 
 export default function AIPanel({
   imageSrc, onApplySuggestion, onAutoEnhance, onNaturalLanguage,
-  detectedObjects, isAnalyzing, onAnalysisComplete,
+  isAnalyzing, onAnalysisComplete,
 }) {
   const [analysis, setAnalysis] = useState(null);
   const [tripleAi, setTripleAi] = useState(null);
@@ -297,23 +297,6 @@ export default function AIPanel({
                   </div>
                 </div>
               </>
-            )}
-
-            {/* === DETECTED OBJECTS === */}
-            {detectedObjects?.length > 0 && (
-              <div className="panel p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <FiEye className="w-3.5 h-3.5 text-[var(--pink)]" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">objects ({detectedObjects.length})</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {detectedObjects.map((obj, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded text-[10px] font-bold bg-[rgba(255,45,111,0.1)] text-[var(--pink)] border border-[rgba(255,45,111,0.2)]">
-                      {obj.class} {Math.round(obj.score * 100)}%
-                    </span>
-                  ))}
-                </div>
-              </div>
             )}
 
             {/* === SUMMARY === */}

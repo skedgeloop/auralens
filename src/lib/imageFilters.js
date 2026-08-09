@@ -777,41 +777,6 @@ export const createFilterPreviews = async (imageSrc, width = 100) => {
   return previews;
 };
 
-/**
- * Suggest filters based on detected objects
- * @param {Array} detectedObjects - The detected objects from AI
- * @returns {Array} - List of suggested filter names
- */
-export const suggestFilters = (detectedObjects) => {
-  if (!detectedObjects || detectedObjects.length === 0) {
-    return ['vintage', 'warm'];
-  }
-
-  const suggestions = [];
-  const hasPerson = detectedObjects.some(obj => obj.label === 'person');
-  const hasSky = detectedObjects.some(obj => obj.label === 'sky' || obj.label === 'cloud');
-  const hasNature = detectedObjects.some(obj =>
-    ['tree', 'plant', 'mountain', 'grass', 'flower'].includes(obj.label)
-  );
-
-  if (hasPerson) {
-    suggestions.push('warm', 'vintage');
-  }
-  if (hasSky) {
-    suggestions.push('cool', 'highContrast');
-  }
-  if (hasNature) {
-    suggestions.push('vintage', 'sepia');
-  }
-
-  // Always have at least one suggestion
-  if (suggestions.length === 0) {
-    suggestions.push('vintage');
-  }
-
-  return [...new Set(suggestions)];
-};
-
 export const FILTER_CATEGORIES = [
   { key: 'all', label: 'All' },
   { key: 'classic', label: 'Classic' },
@@ -847,7 +812,6 @@ export default {
   applyFilterToDataUrl,
   loadImage,
   createFilterPreviews,
-  suggestFilters,
   FILTERS,
   FILTER_CATEGORIES,
   prepareCanvas,

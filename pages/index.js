@@ -18,12 +18,10 @@ import {
   applyFilterToDataUrl, blendImages, FILTERS, FILTER_CATEGORIES,
   rotateImage, flipImage, getImageDimensions,
 } from '../src/lib/imageFilters';
-import { suggestEdits } from '../src/lib/filterSuggestions';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
-const BOX_COLORS = ['#818cf8', '#6366f1', '#a78bfa', '#8b5cf6', '#c084fc', '#e879f9'];
 
 const FEATURES = [
   { icon: FiZap, title: 'Zero effort edits', desc: 'Drop a pic, AI does the work. You just vibe.' },
@@ -42,12 +40,6 @@ export default function Home() {
   const [originalImage, setOriginalImage] = useState(null);
   const [editHistory, setEditHistory] = useState([]); // array of snapshots: { image, description }
   const [historyIndex, setHistoryIndex] = useState(-1);
-
-  // AI detection
-  const [detectedObjects, setDetectedObjects] = useState([]);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [editSuggestions, setEditSuggestions] = useState([]);
-  const modelRef = useRef(null);
 
   // AI analysis
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -132,7 +124,6 @@ export default function Home() {
     setOriginalImage(dataUrl);
     setEditHistory([]);
     setHistoryIndex(-1);
-    setDetectedObjects([]);
     setEditSuggestions([]);
     setActiveFilter('none');
     setFilterIntensity(100);
@@ -164,19 +155,6 @@ export default function Home() {
         if (tripleResult.status === 'fulfilled') {
           setTripleAi(tripleResult.value);
           setAiTier(tripleResult.value.tier || 'pixel');
-          // Add face box from face-api/blazeface if detected
-          if (tripleResult.value.face?.hasFace && tripleResult.value.face.faceBox) {
-            const fb = tripleResult.value.face.faceBox;
-            setDetectedObjects([{
-              class: 'face', score: tripleResult.value.face.confidence / 100 || 0.9,
-              bbox: [fb.x, fb.y, fb.width, fb.height],
-            }]);
-          } else if (tripleResult.value.objects?.objects) {
-            setDetectedObjects(tripleResult.value.objects.objects.map(o => ({
-              class: o.label, score: o.score / 100,
-              bbox: [0, 0, 100, 100],
-            })));
-          }
         }
       } catch (err) {
         console.error('AI error:', err);
@@ -192,34 +170,8 @@ export default function Home() {
     setEditHistory([]);
     setHistoryIndex(-1);
     setDisplayedImage(null);
-    setDetectedObjects([]);
     setEditSuggestions([]);
   }, []);
-
-  // ---- AI Detection ----
-  const runAIDetection = useCallback(async () => {
-    if (!currentImage) return;
-    setIsDetecting(true);
-    try {
-      if (!modelRef.current) {
-        const cocoSSD = await import('@tensorflow-models/coco-ssd');
-        modelRef.current = await cocoSSD.load({ base: 'lite_mobilenet_v2' });
-      }
-      const img = new Image();
-      img.crossOrigin = 'Anonymous';
-      img.src = currentImage;
-      await new Promise((r, e) => { img.onload = r; img.onerror = e; });
-      const predictions = await modelRef.current.detect(img);
-      setDetectedObjects(predictions);
-      setEditSuggestions(suggestEdits(predictions));
-      showToast(`${predictions.length} object${predictions.length !== 1 ? 's' : ''} detected`, 'success');
-    } catch (err) {
-      console.error('AI Detection error:', err);
-      showToast('AI detection failed', 'error');
-    } finally {
-      setIsDetecting(false);
-    }
-  }, [currentImage, showToast]);
 
   // ---- Filters ----
   const handleFilterSelect = useCallback(async (filterName) => {
@@ -398,34 +350,6 @@ export default function Home() {
                       className="max-w-full max-h-[calc(100vh-160px)] object-contain rounded-lg shadow-2xl"
                     />
 
-                    {/* Detection overlays */}
-                    {detectedObjects.length > 0 && displayedImage && (
-                      <div className="absolute inset-0 pointer-events-none">
-                        {detectedObjects.map((obj, i) => {
-                          const color = BOX_COLORS[i % BOX_COLORS.length];
-                          return (
-                            <div
-                              key={i}
-                              className="absolute rounded-md border-2"
-                              style={{
-                                left: obj.bbox[0], top: obj.bbox[1],
-                                width: obj.bbox[2], height: obj.bbox[3],
-                                borderColor: color,
-                                boxShadow: `0 0 10px ${color}44`,
-                              }}
-                            >
-                              <span
-                                className="absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white whitespace-nowrap"
-                                style={{ background: color }}
-                              >
-                                {obj.class} · {Math.round(obj.score * 100)}%
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
                     {/* Comparison slider */}
                     <ComparisonSlider
                       originalSrc={originalImage}
@@ -433,18 +357,9 @@ export default function Home() {
                       isComparing={isComparing}
                     />
 
-                    {/* Detecting overlay */}
-                    {isDetecting && (
-                      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-lg z-30">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="w-8 h-8 border-2 border-white/20 border-t-[var(--pink)] rounded-full animate-spin" />
-                          <p className="text-sm text-white/90">Detecting objects…</p>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Floating AI panel — left side */}
-                    {tripleAi && showAiPanel && !isDetecting && (
+                    {tripleAi && showAiPanel && (
                       <div className="absolute top-3 left-3 z-40 pointer-events-auto">
                         <div className="bg-black/80 backdrop-blur-lg rounded-xl border border-white/10 overflow-hidden"
                           style={{ width: expandAiPanel ? '300px' : '220px', transition: 'width 0.2s ease' }}>
@@ -585,25 +500,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Detection chips */}
-            {detectedObjects.length > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] overflow-x-auto">
-                <FiEye className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
-                {detectedObjects.map((obj, i) => {
-                  const color = BOX_COLORS[i % BOX_COLORS.length];
-                  return (
-                    <span
-                      key={`${obj.class}-${i}`}
-                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                      style={{ color, background: `${color}18`, border: `1px solid ${color}33` }}
-                    >
-                      {obj.class} · {Math.round(obj.score * 100)}%
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
             {/* Edit timeline */}
             {editHistory.length > 0 && (
               <EditTimeline past={editHistory} future={[]} currentIndex={historyIndex} />
@@ -653,7 +549,6 @@ export default function Home() {
               {activeTab === 'ai' && (
                 <AIPanel
                   imageSrc={currentImage}
-                  detectedObjects={detectedObjects}
                   isAnalyzing={isAnalyzing}
                   onApplySuggestion={(suggestion) => {
                     if (suggestion.type === 'adjustment' && suggestion.action) {
