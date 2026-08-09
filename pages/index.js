@@ -20,6 +20,7 @@ import {
 } from '../src/lib/imageFilters';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
+import { smartAutoEnhance } from '../src/lib/realAi';
 import SAMPLES from '../src/lib/samples';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
@@ -50,6 +51,10 @@ export default function Home() {
   const [aiTier, setAiTier] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(true);
   const [expandAiPanel, setExpandAiPanel] = useState(true);
+
+  // Pre-analyzed sample results + auto-fixed "after" images (shown on landing)
+  const [sampleResults, setSampleResults] = useState({});
+  const [sampleEdited, setSampleEdited] = useState({});
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -172,6 +177,17 @@ export default function Home() {
     setHistoryIndex(-1);
     setDisplayedImage(null);
     setEditSuggestions([]);
+    setAiAnalysis(null);
+    setTripleAi(null);
+    setAiTier('');
+    setShowAiPanel(true);
+    setExpandAiPanel(true);
+    setActiveFilter('none');
+    setFilterIntensity(100);
+    setAdjustments({ brightness: 0, contrast: 0, saturation: 0, temperature: 0, hue: 0, sharpness: 0, exposure: 0 });
+    setZoom(1);
+    setIsComparing(false);
+    setImageDimensions({ width: 0, height: 0 });
   }, []);
 
   // ---- Sample: load a curated photo + server-analyze (KV-cached) ----
@@ -231,6 +247,40 @@ export default function Home() {
       setAiAnalysisReady(true);
     }
   }, [showToast]);
+
+  // Pre-analyze samples once on landing: server results (KV-cached) + auto-fixed "after"
+  useEffect(() => {
+    if (hasImage) return;
+    let cancelled = false;
+    SAMPLES.forEach(async (s) => {
+      try {
+        const res = await fetch('/api/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sample: s.name, src: s.src }),
+        });
+        const data = await res.json();
+        if (!cancelled && data && !data.error) {
+          setSampleResults((prev) => ({
+            ...prev,
+            [s.name]: {
+              vibe: data.vibe || { hasVibe: false },
+              face: data.emotion || { hasFace: false },
+              cached: !!data.cached,
+            },
+          }));
+        }
+      } catch (err) { console.error('Sample pre-analyze failed:', s.name, err); }
+
+      // Auto-fixed "after" image (client-side enhance)
+      try {
+        const edited = await smartAutoEnhance(s.src);
+        if (!cancelled && edited) setSampleEdited((prev) => ({ ...prev, [s.name]: edited }));
+      } catch (err) { console.error('Sample enhance failed:', s.name, err); }
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Filters ----
   const handleFilterSelect = useCallback(async (filterName) => {
@@ -381,28 +431,56 @@ export default function Home() {
                 <h2 className="type-h3 text-white">pick a sample, watch it get cooked</h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {SAMPLES.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => handleSampleSelect(s)}
-                    className="group relative aspect-[4/5] rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] transition-all hover:border-[var(--pink)]/50 hover:shadow-[0_8px_40px_-12px_var(--pink)]"
-                  >
-                    <img
-                      src={s.src}
-                      alt={s.hint}
-                      loading="lazy"
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
-                    <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
-                      <span className="text-xs font-bold text-white">{s.hint}</span>
+                {SAMPLES.map((s) => {
+                  const edited = sampleEdited[s.name];
+                  const res = sampleResults[s.name];
+                  return (
+                    <div
+                      key={s.name}
+                      className="group relative aspect-[4/5] rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] transition-all hover:border-[var(--pink)]/50 hover:shadow-[0_8px_40px_-12px_var(--pink)]"
+                    >
+                      {/* Original image underneath */}
+                      <img
+                        src={s.src}
+                        alt={s.hint}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+
+                      {/* Before/after slider once auto-fixed image is ready */}
+                      {edited ? (
+                        <ComparisonSlider
+                          originalSrc={s.src}
+                          editedSrc={edited}
+                          isComparing
+                        />
+                      ) : (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+                          <div className="w-6 h-6 border-2 border-white/20 border-t-[var(--pink)] rounded-full animate-spin" />
+                        </div>
+                      )}
+
+                      {/* Bottom overlay: hint + aura badge */}
+                      <div className="absolute inset-x-0 bottom-0 p-3 text-left z-30">
+                        {res?.vibe?.hasVibe && (
+                          <span className="inline-block mb-1 px-2 py-0.5 rounded-full bg-[var(--pink)] text-black text-[10px] font-bold shadow">
+                            aura: {res.vibe.topLabel}
+                          </span>
+                        )}
+                        <p className="text-xs font-bold text-white">{s.hint}</p>
+                      </div>
+
+                      {/* Custom changes — opens the editor */}
+                      <button
+                        onClick={() => handleSampleSelect(s)}
+                        className="absolute top-2 right-2 z-30 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur border border-white/10 text-[10px] font-bold text-white hover:bg-[var(--pink)] hover:text-black hover:border-[var(--pink)] transition-colors"
+                      >
+                        custom changes →
+                      </button>
                     </div>
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="px-3 py-1.5 rounded-full bg-[var(--pink)] text-black text-xs font-bold shadow-lg">analyze →</span>
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -477,6 +555,10 @@ export default function Home() {
                                 </span>
                               </div>
                               <div className="flex items-center gap-1">
+                                <button onClick={handleNewImage}
+                                  className="text-[9px] text-white/40 hover:text-white transition-colors font-bold" title="Back to home">
+                                  ← home
+                                </button>
                                 <button onClick={() => setExpandAiPanel(!expandAiPanel)}
                                   className="text-[9px] text-[var(--pink)] hover:text-white transition-colors font-bold">
                                   {expandAiPanel ? 'less' : 'more'}
