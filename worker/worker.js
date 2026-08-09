@@ -57,8 +57,8 @@ export default {
 
       // Run all analyses in parallel
       const [emotionResult, vibeResult, objectResult] = await Promise.allSettled([
-        analyzeEmotion(imageBlob),
-        analyzeVibe(imageBlob),
+        analyzeEmotion(imageBlob, env),
+        analyzeVibe(imageBlob, env),
         analyzeObjects(imageBlob),
       ]);
 
@@ -97,7 +97,7 @@ export default {
  * Emotion analysis using CLIP zero-shot classification.
  * Real scores (no fabrication) that also work on drawn faces.
  */
-async function analyzeEmotion(imageBlob) {
+async function analyzeEmotion(imageBlob, env) {
   try {
     const response = await fetch(
       'https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32',
@@ -114,7 +114,7 @@ async function analyzeEmotion(imageBlob) {
     );
 
     if (!response.ok) {
-      return { hasFace: false, emotions: {}, faceCount: 0 };
+      return await analyzeEmotionWorkersAI(imageBlob, env);
     }
 
     const result = await response.json();
@@ -151,15 +151,67 @@ async function analyzeEmotion(imageBlob) {
     };
   } catch (err) {
     console.error('Emotion analysis error:', err);
+    return await analyzeEmotionWorkersAI(imageBlob, env);
+  }
+}
+
+const EMOTION_LABELS = ['happy', 'sad', 'angry', 'surprised', 'neutral', 'smug'];
+
+/**
+ * Emotion via Workers AI LLaVA — real scores for drawn faces too.
+ */
+async function analyzeEmotionWorkersAI(imageBlob, env) {
+  try {
+    // LLaVA takes the image as a base64 string (without data: prefix)
+    const dataUrl = await blobToBase64(imageBlob);
+    const image = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const out = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+      image,
+      prompt: `Describe the facial expression in this image with exactly one of these words: happy, sad, angry, surprised, neutral, smug. Reply with the single word.`,
+    });
+    const text = (out?.description || '').toLowerCase().trim();
+    const emotions = {
+      happiness: 0, sadness: 0, anger: 0, surprise: 0, neutral: 0, sassiness: 0,
+    };
+    let hasFace = false;
+    for (const label of EMOTION_LABELS) {
+      if (text.includes(label)) {
+        hasFace = true;
+        if (label === 'happy') emotions.happiness = 85;
+        else if (label === 'sad') emotions.sadness = 85;
+        else if (label === 'angry') emotions.anger = 85;
+        else if (label === 'surprised') emotions.surprise = 85;
+        else if (label === 'neutral') emotions.neutral = 70;
+        else if (label === 'smug') { emotions.sassiness = 80; emotions.neutral = 40; }
+        break;
+      }
+    }
+    if (!hasFace) return { hasFace: false, emotions: {}, faceCount: 0 };
+    // sassiness real formula from neutral
+    if (emotions.sassiness === 0) {
+      emotions.sassiness = Math.min(95, Math.round((100 - emotions.neutral) * 25));
+    }
+    return { hasFace: true, faceCount: 1, emotions };
+  } catch (err) {
+    console.error('Workers AI emotion error:', err);
     return { hasFace: false, emotions: {}, faceCount: 0 };
   }
 }
 
+const VIBE_LABELS = [
+  'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
+  'alpha energy', 'main character', 'hot', 'aesthetic',
+  'iconic', 'legendary', 'dark vibes', 'soft vibes',
+  'chaotic energy', 'elegant', 'classy', 'boss energy',
+  'dreamy', 'ethereal', 'playful', 'mysterious',
+];
+
 /**
  * Vibe classification using zero-shot image classification (CLIP).
  * openai/clip-vit-base-patch32 is the canonical serverless-served CLIP.
+ * Falls back to Workers AI LLaVA when Hugging Face is unreachable.
  */
-async function analyzeVibe(imageBlob) {
+async function analyzeVibe(imageBlob, env) {
   try {
     // Use CLIP for zero-shot image classification
     const response = await fetch(
@@ -170,21 +222,15 @@ async function analyzeVibe(imageBlob) {
         body: JSON.stringify({
           inputs: await blobToBase64(imageBlob),
           parameters: {
-            candidate_labels: [
-              'handsome', 'gorgeous', 'cute', 'stunning', 'beautiful',
-              'alpha energy', 'main character', 'hot', 'aesthetic',
-              'iconic', 'legendary', 'dark vibes', 'soft vibes',
-              'chaotic energy', 'elegant', 'classy', 'boss energy',
-              'dreamy', 'ethereal', 'playful', 'mysterious',
-            ],
+            candidate_labels: VIBE_LABELS,
           },
         }),
       }
     );
 
     if (!response.ok) {
-      // Fallback to image classification
-      return await analyzeVibeFallback(imageBlob);
+      // Hugging Face unreachable — try Workers AI LLaVA instead
+      return await analyzeVibeWorkersAI(imageBlob, env);
     }
 
     const result = await response.json();
@@ -203,62 +249,43 @@ async function analyzeVibe(imageBlob) {
     return { topLabel, topScore, scores, hasVibe: true };
   } catch (err) {
     console.error('CLIP error:', err);
-    return await analyzeVibeFallback(imageBlob);
+    return await analyzeVibeWorkersAI(imageBlob, env);
   }
 }
 
 /**
- * Fallback: image classification mapped to vibe tags.
+ * Vibe + emotion via Workers AI LLaVA vision model.
+ * Runs on Cloudflare's own network — no external DNS dependency.
  */
-async function analyzeVibeFallback(imageBlob) {
+async function analyzeVibeWorkersAI(imageBlob, env) {
   try {
-    const response = await fetch(
-      'https://api-inference.huggingface.co/models/google/vit-base-patch16-224',
-      { method: 'POST', body: imageBlob }
-    );
-
-    if (!response.ok) {
-      return { hasVibe: false };
-    }
-
-    const results = await response.json();
-
-    // Map ImageNet labels to vibe tags
-    const vibeMap = {
-      'person': 'main character', 'man': 'handsome', 'woman': 'gorgeous',
-      'boy': 'cute', 'girl': 'stunning', 'suit': 'boss energy',
-      'dress': 'elegant', 'car': 'aesthetic', 'dog': 'playful',
-      'cat': 'cute', 'flower': 'beautiful', 'sunset': 'dreamy',
-      'night': 'mysterious', 'food': 'aesthetic', 'sports': 'alpha energy',
-    };
-
+    // LLaVA takes the image as a base64 string (without data: prefix)
+    const dataUrl = await blobToBase64(imageBlob);
+    const image = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const out = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+      image,
+      prompt: `Pick ONE vibe label from this exact list that best fits the image: ${VIBE_LABELS.join(', ')}. Reply with the label only.`,
+    });
+    const text = (out?.description || '').trim().toLowerCase();
     const scores = {};
-    let topLabel = 'aesthetic';
-    let topScore = 50;
-
-    if (Array.isArray(results)) {
-      results.forEach(item => {
-        const label = item.label.toLowerCase();
-        let vibe = vibeMap[label] || null;
-        if (!vibe) {
-          for (const [key, val] of Object.entries(vibeMap)) {
-            if (label.includes(key)) { vibe = val; break; }
-          }
-        }
-        if (vibe) {
-          const score = Math.round(item.score * 100);
-          scores[vibe] = Math.max(scores[vibe] || 0, score);
-          if (score > topScore) { topScore = score; topLabel = vibe; }
-        }
-      });
+    let topLabel = null;
+    let topScore = 0;
+    for (const label of VIBE_LABELS) {
+      if (text.includes(label)) {
+        // First label found in the reply wins
+        if (!topLabel) { topLabel = label; topScore = 100; }
+        scores[label] = 100;
+      }
     }
-
-    if (Object.keys(scores).length === 0) {
-      return { hasVibe: false };
+    if (!topLabel) {
+      // Fallback: match against the text anyway, else no vibe
+      const match = VIBE_LABELS.find(l => text.split(/\s+/).includes(l.split(' ')[0]));
+      if (match) { topLabel = match; topScore = 100; scores[match] = 100; }
+      else return { hasVibe: false };
     }
-
     return { topLabel, topScore, scores, hasVibe: true };
   } catch (err) {
+    console.error('Workers AI LLaVA error:', err);
     return { hasVibe: false };
   }
 }
