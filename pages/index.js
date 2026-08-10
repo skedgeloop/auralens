@@ -81,6 +81,8 @@ export default function Home() {
   const [toast, setToast] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [applying, setApplying] = useState(false);
+  // Auto-apply the AI smart-enhance after analysis. Toggle OFF to work fully manually.
+  const [autoEnhance, setAutoEnhance] = useState(true);
 
   // The "current" edited image (after filter, before adjustments)
   const currentImage = historyIndex >= 0 ? editHistory[historyIndex]?.image : originalImage;
@@ -132,6 +134,15 @@ export default function Home() {
     showToast('Redo', 'info');
   }, [canRedo, showToast]);
 
+  // Undo ALL edits — reset to the original image (keeps the photo in the editor).
+  const handleUndoAll = useCallback(() => {
+    if (historyIndex < 0) return; // already at original
+    setHistoryIndex(-1);
+    setDisplayedImage(originalImage);
+    setEditSuggestions([]);
+    showToast('Reset to original', 'info');
+  }, [historyIndex, originalImage, showToast]);
+
   // ---- Upload ----
   const handleImageUpload = useCallback((file, dataUrl) => {
     setOriginalImage(dataUrl);
@@ -182,6 +193,7 @@ export default function Home() {
 
   // ---- Auto-apply smart enhance after analysis (once per upload) ----
   const autoApplyEnhance = useCallback(async (src) => {
+    if (!autoEnhance) return; // auto-enhance disabled — user works manually
     // Show a brief "applying recommended changes" state
     setApplying(true);
     try {
@@ -199,7 +211,7 @@ export default function Home() {
       }
     } catch (err) { console.error('Auto-enhance failed:', err); }
     finally { setApplying(false); }
-  }, [historyIndex]);
+  }, [historyIndex, autoEnhance]);
 
   const handleNewImage = useCallback(() => {
     setOriginalImage(null);
@@ -460,7 +472,7 @@ export default function Home() {
       {hasImage && (
         <Toolbar
           canUndo={canUndo} canRedo={canRedo}
-          onUndo={handleUndo} onRedo={handleRedo}
+          onUndo={handleUndo} onRedo={handleRedo} onUndoAll={handleUndoAll}
           onExport={() => setShowExport(true)}
           onRotateLeft={() => handleRotate(-90)}
           onRotateRight={() => handleRotate(90)}
@@ -470,6 +482,8 @@ export default function Home() {
           onNewImage={handleNewImage}
           isComparing={isComparing}
           onCompareToggle={() => setIsComparing((c) => !c)}
+          autoEnhance={autoEnhance}
+          onAutoEnhanceToggle={() => setAutoEnhance((v) => !v)}
         />
       )}
 
@@ -551,14 +565,16 @@ export default function Home() {
                       naturalHeight={imageDimensions.height}
                     />
 
-                    {/* Analyzing overlay — full-screen blur + big pulsing circle */}
+                    {/* Analyzing overlay — smooth, single spinner (no stutter) */}
                     {isAnalyzing && (
-                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/60 backdrop-blur-md">
+                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/55">
                         <div className="flex flex-col items-center gap-4">
                           <div className="relative w-20 h-20">
-                            <div className="absolute inset-0 rounded-full border-2 border-[var(--pink)]/40 animate-ping" />
-                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[var(--pink)] animate-spin" />
-                            <div className="absolute inset-4 rounded-full bg-[var(--pink)]/25 backdrop-blur-sm flex items-center justify-center">
+                            {/* One clean spinning ring, steady 1s rotation */}
+                            <div className="absolute inset-0 rounded-full border-[3px] border-[var(--pink)]/15" />
+                            <div className="absolute inset-0 rounded-full border-[3px] border-transparent border-t-[var(--pink)] animate-spin"
+                              style={{ animationDuration: '1s', animationTimingFunction: 'linear' }} />
+                            <div className="absolute inset-4 rounded-full bg-[var(--pink)]/20 flex items-center justify-center">
                               <span className="text-[10px] text-[var(--pink)] font-bold uppercase tracking-wider">AI</span>
                             </div>
                           </div>

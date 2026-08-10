@@ -29,33 +29,42 @@ export const runTripleAnalysis = async (imageSrc) => {
     results.models.push({ name: 'DETR (server)', status: 'failed', detail: e.message });
   }
 
-  // === CLIENT AI — run ALL models, combine results ===
+  // === CLIENT AI — run ALL models in PARALLEL, combine results ===
+  // (was sequential ~3x; now takes only the slowest model's time)
+  const [faceApiResult, blazefaceResult, objectResult] = await Promise.allSettled([
+    faceApiDetect(imageSrc),
+    blazefaceDetect(imageSrc),
+    cocoSsdDetect(imageSrc),
+  ]);
+
   // Model 1: face-api
-  let faceApiResult = null;
-  try {
-    faceApiResult = await faceApiDetect(imageSrc);
-    results.models.push({ name: 'face-api', status: 'ok', detail: faceApiResult.hasFace ? `Found face, happy=${faceApiResult.emotions.happiness}%` : 'No face' });
-  } catch (e) {
-    results.models.push({ name: 'face-api', status: 'failed', detail: e.message.substring(0, 50) });
+  if (faceApiResult.status === 'fulfilled') {
+    const r = faceApiResult.value;
+    results.models.push({ name: 'face-api', status: 'ok', detail: r.hasFace ? `Found face, happy=${r.emotions.happiness}%` : 'No face' });
+  } else {
+    results.models.push({ name: 'face-api', status: 'failed', detail: String(faceApiResult.reason).substring(0, 50) });
   }
 
   // Model 2: blazeface
-  let blazefaceResult = null;
-  try {
-    blazefaceResult = await blazefaceDetect(imageSrc);
-    results.models.push({ name: 'blazeface', status: 'ok', detail: blazefaceResult.hasFace ? `Found ${blazefaceResult.faceCount} face(s)` : 'No face' });
-  } catch (e) {
-    results.models.push({ name: 'blazeface', status: 'failed', detail: e.message.substring(0, 50) });
+  if (blazefaceResult.status === 'fulfilled') {
+    const r = blazefaceResult.value;
+    results.models.push({ name: 'blazeface', status: 'ok', detail: r.hasFace ? `Found ${r.faceCount} face(s)` : 'No face' });
+  } else {
+    results.models.push({ name: 'blazeface', status: 'failed', detail: String(blazefaceResult.reason).substring(0, 50) });
   }
 
   // Model 3: COCO-SSD objects
-  let objectResult = null;
-  try {
-    objectResult = await cocoSsdDetect(imageSrc);
-    results.models.push({ name: 'COCO-SSD', status: 'ok', detail: objectResult.hasObjects ? `${objectResult.objects.length} objects` : 'No objects' });
-  } catch (e) {
-    results.models.push({ name: 'COCO-SSD', status: 'failed', detail: e.message.substring(0, 50) });
+  if (objectResult.status === 'fulfilled') {
+    const r = objectResult.value;
+    results.models.push({ name: 'COCO-SSD', status: 'ok', detail: r.hasObjects ? `${r.objects.length} objects` : 'No objects' });
+  } else {
+    results.models.push({ name: 'COCO-SSD', status: 'failed', detail: String(objectResult.reason).substring(0, 50) });
   }
+
+  // Normalize allSettled results back to plain values for the combine step
+  const faceApiValue = faceApiResult.status === 'fulfilled' ? faceApiResult.value : null;
+  const blazefaceValue = blazefaceResult.status === 'fulfilled' ? blazefaceResult.value : null;
+  const objectValue = objectResult.status === 'fulfilled' ? objectResult.value : null;
 
   // === COMBINE RESULTS — best face + emotions from any model ===
   // face-api is most proven on drawn faces; server CLIP emotion is real;
@@ -63,25 +72,25 @@ export const runTripleAnalysis = async (imageSrc) => {
   const serverFace = results.face; // real CLIP emotion from server
   const serverHasEmotions = serverFace?.hasFace && serverFace.emotions &&
     Object.keys(serverFace.emotions).length > 0;
-  const faceSource = faceApiResult?.hasFace ? faceApiResult
+  const faceSource = faceApiValue?.hasFace ? faceApiValue
     : serverHasEmotions ? serverFace
-    : blazefaceResult?.hasFace ? blazefaceResult
+    : blazefaceValue?.hasFace ? blazefaceValue
     : null;
 
   if (faceSource) {
     results.face = { ...faceSource };
     // Blazeface knows where the face is even when emotions come from elsewhere
-    if (blazefaceResult?.hasFace && !results.face.faceBox) {
-      results.face.faceBox = blazefaceResult.faceBox;
-      results.face.faceCount = Math.max(results.face.faceCount || 1, blazefaceResult.faceCount);
+    if (blazefaceValue?.hasFace && !results.face.faceBox) {
+      results.face.faceBox = blazefaceValue.faceBox;
+      results.face.faceCount = Math.max(results.face.faceCount || 1, blazefaceValue.faceCount);
     }
   } else {
     results.face = { hasFace: false, emotions: {}, faceCount: 0 };
   }
 
   // Objects from COCO-SSD
-  if (objectResult?.hasObjects && !results.objects?.hasObjects) {
-    results.objects = objectResult;
+  if (objectValue?.hasObjects && !results.objects?.hasObjects) {
+    results.objects = objectValue;
   }
 
   // Generate vibe from combined results

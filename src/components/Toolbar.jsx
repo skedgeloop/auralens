@@ -1,15 +1,16 @@
 import React from 'react';
 import {
   FiRefreshCw, FiDownload, FiRotateCcw, FiRotateCw,
-  FiMaximize2, FiZoomIn, FiZoomOut, FiImage,
+  FiMaximize2, FiZoomIn, FiZoomOut, FiImage, FiX, FiZap,
 } from 'react-icons/fi';
 
 export default function Toolbar({
-  canUndo, canRedo, onUndo, onRedo,
+  canUndo, canRedo, onUndo, onRedo, onUndoAll,
   onExport, onRotateLeft, onRotateRight,
   onFlipH, onFlipV,
   zoom, onZoomIn, onZoomOut, onFitZoom,
   onNewImage, isComparing, onCompareToggle,
+  autoEnhance, onAutoEnhanceToggle,
 }) {
   return (
     <div className="toolbar">
@@ -31,6 +32,9 @@ export default function Toolbar({
       </button>
       <button className="btn-icon" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)">
         <FiRefreshCw className="w-4 h-4" />
+      </button>
+      <button className="btn-icon" onClick={onUndoAll} disabled={!canUndo} title="Undo all — reset to original">
+        <FiX className="w-4 h-4" />
       </button>
 
       <div className="toolbar-divider" />
@@ -71,6 +75,15 @@ export default function Toolbar({
       </button>
 
       <div className="flex-1" />
+
+      {/* Auto-enhance toggle */}
+      <button
+        onClick={onAutoEnhanceToggle}
+        className={`btn-icon ${autoEnhance ? 'active' : ''}`}
+        title={autoEnhance ? 'AI auto-enhance ON — click to edit manually' : 'AI auto-enhance OFF — manual mode'}
+      >
+        <FiZap className="w-4 h-4" />
+      </button>
 
       {/* Actions */}
       <button onClick={onNewImage} className="btn btn-dark text-xs">
