@@ -1,6 +1,6 @@
 /* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState } from 'react';
-import { FiCheck, FiRotateCcw, FiZap } from 'react-icons/fi';
+import { FiRotateCcw, FiZap } from 'react-icons/fi';
 
 const Slider = ({ label, value, min, max, step = 1, onChange }) => {
   const pct = ((value - min) / (max - min)) * 100;
@@ -31,20 +31,28 @@ const DEFAULT = { amount: 50, radius: 1, threshold: 0 };
 
 /**
  * Advanced Sharpen / Clarity controls (unsharp mask).
- * "apply sharpen" commits a revertable history step via onApplySharpen.
+ * Every slider move live-previews instantly via onPreviewSharpen (debounced
+ * in the parent); onApplySharpen still commits a revertable history step.
  */
-export default function SharpenPanel({ onApplySharpen }) {
+export default function SharpenPanel({ onApplySharpen, onPreviewSharpen }) {
   const [amount, setAmount] = useState(DEFAULT.amount);   // 0-200 → 0-2.0
   const [radius, setRadius] = useState(DEFAULT.radius);   // 0.5-5 px
   const [threshold, setThreshold] = useState(DEFAULT.threshold); // 0-100
 
-  const handleApply = () =>
-    onApplySharpen?.({ amount: amount / 100, radius, threshold });
+  // Live preview on every slider move (debounced in the parent, no history).
+  const update = (key, value) => {
+    const next = { amount, radius, threshold, [key]: value };
+    if (key === 'amount') setAmount(value);
+    else if (key === 'radius') setRadius(value);
+    else setThreshold(value);
+    onPreviewSharpen?.({ amount: next.amount / 100, radius: next.radius, threshold: next.threshold });
+  };
 
   const handleReset = () => {
     setAmount(DEFAULT.amount);
     setRadius(DEFAULT.radius);
     setThreshold(DEFAULT.threshold);
+    onPreviewSharpen?.({ amount: DEFAULT.amount / 100, radius: DEFAULT.radius, threshold: DEFAULT.threshold });
   };
 
   return (
@@ -62,15 +70,12 @@ export default function SharpenPanel({ onApplySharpen }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        <Slider label="amount" value={amount} min={0} max={200} onChange={setAmount} />
-        <Slider label="radius" value={radius} min={0.5} max={5} step={0.1} onChange={setRadius} />
-        <Slider label="threshold" value={threshold} min={0} max={100} onChange={setThreshold} />
+        <Slider label="amount" value={amount} min={0} max={200} onChange={(v) => update('amount', v)} />
+        <Slider label="radius" value={radius} min={0.5} max={5} step={0.1} onChange={(v) => update('radius', v)} />
+        <Slider label="threshold" value={threshold} min={0} max={100} onChange={(v) => update('threshold', v)} />
       </div>
 
-      <button onClick={handleApply} className="btn btn-pink w-full mt-4 py-2.5 text-xs">
-        <FiCheck className="w-3.5 h-3.5" /> apply sharpen
-      </button>
-      <p className="mt-2 text-[10px] text-[var(--text-dim)]">
+      <p className="mt-3 text-[10px] text-[var(--text-dim)]">
         <FiZap className="w-3 h-3 inline mr-1 text-[var(--pink)]" />
         classic unsharp mask — radius 0.5–5px, threshold suppresses noise.
       </p>

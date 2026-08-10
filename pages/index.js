@@ -294,6 +294,22 @@ export default function Home() {
     } catch (err) { console.error('Sharpen failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
+  // Live preview of sharpen — updates the display instantly on drag
+  // (no history push; only "apply" commits a step).
+  const sharpenPreviewRef = useRef(null);
+  const handlePreviewSharpen = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const sharpened = await applyUnsharpMask(base, opts);
+        setDisplayedImage(sharpened);
+      } catch (err) { console.error('Sharpen preview failed:', err); }
+    };
+    clearTimeout(sharpenPreviewRef.current);
+    sharpenPreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
+
   // ---- Selective selection (magic wand) — commits as a revertable step ----
   const handleApplySelectionEffect = useCallback(async (result, description) => {
     if (!result) return;
@@ -530,6 +546,24 @@ export default function Home() {
       showToast(opts.type === 'mesh' ? 'Mesh warp applied' : 'Perspective applied', 'success');
     } catch (err) { console.error('Warp failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
+
+  // Live preview of perspective / mesh warp — updates the display instantly on
+  // drag (no history push; only "apply" commits a step).
+  const warpPreviewRef = useRef(null);
+  const handlePreviewWarp = useCallback(async (opts) => {
+    if (!currentImage || !opts) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const warped = opts.type === 'mesh'
+          ? await applyMeshWarp(base, opts)
+          : await applyPerspective(base, opts);
+        if (warped) setDisplayedImage(warped);
+      } catch (err) { console.error('Warp preview failed:', err); }
+    };
+    clearTimeout(warpPreviewRef.current);
+    warpPreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
 
   // ---- Right sidebar drag-resize ----
   const startSidebarResize = useCallback((e) => {
@@ -948,6 +982,7 @@ export default function Home() {
                   />
                   <WarpPanel
                     previewImage={currentImage}
+                    onPreviewWarp={handlePreviewWarp}
                     onApplyWarp={handleApplyWarp}
                   />
                   <BlurPanel
@@ -1037,7 +1072,10 @@ export default function Home() {
 
               {activeTab === 'tools' && (
                 <>
-                  <SharpenPanel onApplySharpen={handleApplySharpen} />
+                  <SharpenPanel
+                    onApplySharpen={handleApplySharpen}
+                    onPreviewSharpen={handlePreviewSharpen}
+                  />
                   <ExifPanel exif={exifData} />
                 </>
               )}

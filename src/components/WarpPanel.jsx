@@ -1,6 +1,6 @@
 /* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiCheck, FiMove } from 'react-icons/fi';
+import { FiMove } from 'react-icons/fi';
 import { getImageDimensions } from '../lib/imageFilters';
 
 const GRID_N = 8;
@@ -75,7 +75,7 @@ const PERSPECTIVE_PRESETS = [
 
 const MESH_PRESETS = ['bulge', 'pinch', 'wave'];
 
-export default function WarpPanel({ previewImage, onApplyWarp }) {
+export default function WarpPanel({ previewImage, onApplyWarp, onPreviewWarp }) {
   const [dims, setDims] = useState({ width: 0, height: 0 });
   const [keystone, setKeystone] = useState(0);
   const [skew, setSkew] = useState(0);
@@ -93,20 +93,16 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
 
   const canWarp = dims.width > 0 && dims.height > 0;
 
-  const applyPerspectivePreset = useCallback((args) => {
+  // Live preview on every preset / slider change (debounced in the parent).
+  const previewPerspective = useCallback((args) => {
     if (!canWarp) return;
-    onApplyWarp({ type: 'perspective', ...buildQuad(dims.width, dims.height, args) });
-  }, [canWarp, dims, onApplyWarp]);
+    onPreviewWarp?.({ type: 'perspective', ...buildQuad(dims.width, dims.height, args) });
+  }, [canWarp, dims, onPreviewWarp]);
 
-  const handleApplyPerspective = useCallback(() => {
+  const previewMesh = useCallback((kind, strength) => {
     if (!canWarp) return;
-    onApplyWarp({ type: 'perspective', ...buildQuad(dims.width, dims.height, { tiltX: keystone, skew }) });
-  }, [canWarp, dims, keystone, skew, onApplyWarp]);
-
-  const handleApplyMesh = useCallback(() => {
-    if (!canWarp) return;
-    onApplyWarp({ type: 'mesh', grid: makeGrid(), warp: makeWarp(meshKind, meshStrength) });
-  }, [canWarp, meshKind, meshStrength, onApplyWarp]);
+    onPreviewWarp?.({ type: 'mesh', grid: makeGrid(), warp: makeWarp(kind, strength) });
+  }, [canWarp, onPreviewWarp]);
 
   const buttonClass = (active) =>
     `px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors border ${
@@ -129,7 +125,7 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
         {PERSPECTIVE_PRESETS.map((p) => (
           <button
             key={p.label}
-            onClick={() => applyPerspectivePreset(p.args)}
+            onClick={() => previewPerspective(p.args)}
             disabled={!canWarp}
             className={buttonClass(false)}
           >
@@ -146,7 +142,7 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
         <input
           type="range" min={-45} max={45} value={keystone}
           aria-label="Keystone angle"
-          onChange={(e) => setKeystone(Number(e.target.value))}
+          onChange={(e) => { const v = Number(e.target.value); setKeystone(v); previewPerspective({ tiltX: v, skew }); }}
           className="slider"
           style={{
             background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${((keystone + 45) / 90) * 100}%, #222 ${((keystone + 45) / 90) * 100}%)`,
@@ -161,21 +157,13 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
         <input
           type="range" min={-45} max={45} value={skew}
           aria-label="Skew angle"
-          onChange={(e) => setSkew(Number(e.target.value))}
+          onChange={(e) => { const v = Number(e.target.value); setSkew(v); previewPerspective({ tiltX: keystone, skew: v }); }}
           className="slider"
           style={{
             background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${((skew + 45) / 90) * 100}%, #222 ${((skew + 45) / 90) * 100}%)`,
           }}
         />
       </div>
-
-      <button
-        onClick={handleApplyPerspective}
-        disabled={!canWarp}
-        className="btn btn-pink w-full mt-3 py-2 text-xs"
-      >
-        <FiCheck className="w-3.5 h-3.5" /> apply perspective
-      </button>
 
       {/* --- Mesh warp --- */}
       <div className="mt-4 pt-3 border-t border-[var(--border)]">
@@ -186,7 +174,7 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
           {MESH_PRESETS.map((kind) => (
             <button
               key={kind}
-              onClick={() => setMeshKind(kind)}
+              onClick={() => { setMeshKind(kind); previewMesh(kind, meshStrength); }}
               disabled={!canWarp}
               className={buttonClass(meshKind === kind)}
             >
@@ -202,20 +190,13 @@ export default function WarpPanel({ previewImage, onApplyWarp }) {
           <input
             type="range" min={0} max={100} value={meshStrength}
             aria-label="Warp strength"
-            onChange={(e) => setMeshStrength(Number(e.target.value))}
+            onChange={(e) => { const v = Number(e.target.value); setMeshStrength(v); previewMesh(meshKind, v); }}
             className="slider"
             style={{
               background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${meshStrength}%, #222 ${meshStrength}%)`,
             }}
           />
         </div>
-        <button
-          onClick={handleApplyMesh}
-          disabled={!canWarp}
-          className="btn btn-pink w-full mt-3 py-2 text-xs"
-        >
-          <FiCheck className="w-3.5 h-3.5" /> apply mesh warp
-        </button>
       </div>
     </div>
   );
