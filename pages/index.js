@@ -193,6 +193,9 @@ export default function Home() {
           return [...trimmed, { image: enhanced, description: 'Smart enhance' }];
         });
         setHistoryIndex((prev) => prev + 1);
+        // Auto-open the compare slider right after the AI correction so the
+        // user can see original vs enhanced immediately.
+        setIsComparing(true);
       }
     } catch (err) { console.error('Auto-enhance failed:', err); }
     finally { setApplying(false); }
