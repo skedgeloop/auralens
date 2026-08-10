@@ -61,6 +61,7 @@ export default function Home() {
   const [aiTier, setAiTier] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(true);
   const [expandAiPanel, setExpandAiPanel] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(300); // px, adjustable
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -598,7 +599,7 @@ export default function Home() {
                     {tripleAi && showAiPanel && (
                       <div className="absolute top-3 left-3 z-40 pointer-events-auto">
                         <div className="bg-black/80 backdrop-blur-lg rounded-xl border border-white/10 overflow-hidden"
-                          style={{ width: expandAiPanel ? '300px' : '220px', transition: 'width 0.2s ease' }}>
+                          style={{ width: `${expandAiPanel ? aiPanelWidth : 220}px`, transition: 'width 0.15s ease' }}>
 
                           {/* Header — always visible */}
                           <div className="p-3 pb-2">
@@ -621,6 +622,23 @@ export default function Home() {
                                   className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white text-[8px]">×</button>
                               </div>
                             </div>
+
+                            {/* Panel width slider — drag to narrow/widen */}
+                            {expandAiPanel && (
+                              <div className="flex items-center gap-2 mt-1 px-0.5">
+                                <span className="text-[8px] text-white/40 font-bold">width</span>
+                                <input
+                                  type="range" min={200} max={520} value={aiPanelWidth}
+                                  aria-label="AI panel width"
+                                  onChange={(e) => setAiPanelWidth(Number(e.target.value))}
+                                  className="slider flex-1"
+                                  style={{
+                                    background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${((aiPanelWidth - 200) / 320) * 100}%, #222 ${((aiPanelWidth - 200) / 320) * 100}%)`,
+                                  }}
+                                />
+                                <span className="text-[8px] text-white/40 font-mono w-7 text-right">{aiPanelWidth}</span>
+                              </div>
+                            )}
 
                             {/* Aura */}
                             {tripleAi.vibe?.hasVibe && (

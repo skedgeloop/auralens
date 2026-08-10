@@ -1,6 +1,14 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { FiZap as FiWand2, FiCheck } from 'react-icons/fi';
+import { FiZap as FiWand2, FiCheck, FiCornerUpLeft, FiCornerUpRight, FiCornerDownLeft, FiCornerDownRight } from 'react-icons/fi';
 import { magicWandSelect, applyMaskedEffect, invertMask, maskToDataUrl } from '../lib/imageFilters';
+
+// Panel corner options + the Tailwind classes for each corner
+const CORNERS = {
+  'top-left': 'top-3 left-3',
+  'top-right': 'top-3 right-3',
+  'bottom-left': 'bottom-3 left-3',
+  'bottom-right': 'bottom-3 right-3',
+};
 
 /**
  * Magic Wand / Selective Selection tool.
@@ -16,6 +24,7 @@ import { magicWandSelect, applyMaskedEffect, invertMask, maskToDataUrl } from '.
 export default function SelectionTool({ imageSrc, onApply, naturalWidth = 0, naturalHeight = 0 }) {
   const [open, setOpen] = useState(false);
   const [tolerance, setTolerance] = useState(30);
+  const [position, setPosition] = useState('bottom-right'); // panel corner
   const [selection, setSelection] = useState(null); // { mask, width, height }
   const [overlaySrc, setOverlaySrc] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -116,8 +125,8 @@ export default function SelectionTool({ imageSrc, onApply, naturalWidth = 0, nat
         />
       )}
 
-      {/* Floating panel */}
-      <div className="absolute bottom-3 right-3 z-10 pointer-events-auto">
+      {/* Floating panel — positionable to any corner */}
+      <div className={`absolute ${CORNERS[position] || CORNERS['bottom-right']} z-10 pointer-events-auto`}>
         {!open ? (
           <button
             onClick={() => setOpen(true)}
@@ -132,7 +141,16 @@ export default function SelectionTool({ imageSrc, onApply, naturalWidth = 0, nat
               <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--pink)] flex items-center gap-1.5">
                 <FiWand2 className="w-3 h-3" /> selective selection
               </span>
-              <button onClick={() => setOpen(false)} className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white text-[8px]">×</button>
+              <div className="flex items-center gap-1">
+                {/* Corner picker — move the panel to any corner */}
+                <div className="flex items-center gap-0.5 mr-1" title="Move panel to a corner">
+                  <button onClick={() => setPosition('top-left')} className={`w-4 h-4 rounded flex items-center justify-center ${position === 'top-left' ? 'bg-[var(--pink)] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`} aria-label="Top left"><FiCornerUpLeft className="w-2.5 h-2.5" /></button>
+                  <button onClick={() => setPosition('top-right')} className={`w-4 h-4 rounded flex items-center justify-center ${position === 'top-right' ? 'bg-[var(--pink)] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`} aria-label="Top right"><FiCornerUpRight className="w-2.5 h-2.5" /></button>
+                  <button onClick={() => setPosition('bottom-left')} className={`w-4 h-4 rounded flex items-center justify-center ${position === 'bottom-left' ? 'bg-[var(--pink)] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`} aria-label="Bottom left"><FiCornerDownLeft className="w-2.5 h-2.5" /></button>
+                  <button onClick={() => setPosition('bottom-right')} className={`w-4 h-4 rounded flex items-center justify-center ${position === 'bottom-right' ? 'bg-[var(--pink)] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`} aria-label="Bottom right"><FiCornerDownRight className="w-2.5 h-2.5" /></button>
+                </div>
+                <button onClick={() => setOpen(false)} className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white text-[8px]">×</button>
+              </div>
             </div>
 
             <div className="p-3 flex flex-col gap-2.5">
