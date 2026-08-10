@@ -19,7 +19,7 @@ const LEVELS = [
 const SIZE = 200;
 const identityPoints = () => [[0, 0], [255, 255]];
 
-export default function CurvesPanel({ onApply }) {
+export default function CurvesPanel({ onApply, onPreview }) {
   const [curves, setCurves] = useState({
     master: identityPoints(), r: identityPoints(), g: identityPoints(), b: identityPoints(),
   });
@@ -29,6 +29,19 @@ export default function CurvesPanel({ onApply }) {
   });
   const canvasRef = useRef(null);
   const dragIdxRef = useRef(-1);
+  const previewTimerRef = useRef(null);
+
+  // Live preview whenever curves or levels change (debounced ~50ms).
+  const emitPreview = useCallback(() => {
+    if (!onPreview) return;
+    clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      onPreview({
+        curves: { master: curves.master, r: curves.r, g: curves.g, b: curves.b },
+        levels,
+      });
+    }, 50);
+  }, [onPreview, curves, levels]);
 
   const currentPoints = curves[channel];
   const ch = CHANNELS.find((c) => c.key === channel);
@@ -110,6 +123,7 @@ export default function CurvesPanel({ onApply }) {
     }
     dragIdxRef.current = idx;
     setCurves((prev) => ({ ...prev, [channel]: pts }));
+    emitPreview();
     e.target.setPointerCapture(e.pointerId);
   };
 
@@ -120,6 +134,7 @@ export default function CurvesPanel({ onApply }) {
       const pts = prev[channel].map((p, i) => (i === dragIdxRef.current ? [x, y] : p));
       return { ...prev, [channel]: pts };
     });
+    emitPreview();
   };
 
   const handlePointerUp = () => { dragIdxRef.current = -1; };
@@ -132,9 +147,13 @@ export default function CurvesPanel({ onApply }) {
       if (idx < 0 || pts.length <= 2) return prev;
       return { ...prev, [channel]: pts.filter((_, i) => i !== idx) };
     });
+    emitPreview();
   };
 
-  const resetChannel = () => setCurves((prev) => ({ ...prev, [channel]: identityPoints() }));
+  const resetChannel = () => {
+    setCurves((prev) => ({ ...prev, [channel]: identityPoints() }));
+    emitPreview();
+  };
 
   const handleApply = () => {
     onApply?.({
@@ -207,7 +226,7 @@ export default function CurvesPanel({ onApply }) {
             <input
               type="range" min={l.min} max={l.max} step={l.step} value={levels[l.key]}
               aria-label={l.label}
-              onChange={(e) => setLevels((prev) => ({ ...prev, [l.key]: Number(e.target.value) }))}
+              onChange={(e) => { setLevels((prev) => ({ ...prev, [l.key]: Number(e.target.value) })); emitPreview(); }}
               className="slider"
               style={{
                 background: `linear-gradient(to right, var(--pink) 0%, var(--pink) ${pct(levels[l.key], l.min, l.max)}%, #222 ${pct(levels[l.key], l.min, l.max)}%)`,

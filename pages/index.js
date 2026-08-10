@@ -476,6 +476,22 @@ export default function Home() {
     colorBalancePreviewRef.current = setTimeout(run, 60); // debounce drag
   }, [currentImage, applyColorBalanceToImage]);
 
+  // ---- Curves & Levels — LIVE preview (debounced, no history) ----
+  const curvesPreviewRef = useRef(null);
+  const handlePreviewCurves = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        let result = await applyCurves(base, opts?.curves || {});
+        result = await applyLevels(result, opts?.levels || {});
+        setDisplayedImage(result); // live, no history push
+      } catch (err) { console.error('Curves preview failed:', err); }
+    };
+    clearTimeout(curvesPreviewRef.current);
+    curvesPreviewRef.current = setTimeout(run, 50); // debounce during drag
+  }, [currentImage]);
+
   // ---- Curves & Levels — commits as a revertable step ----
   const handleApplyCurves = useCallback(async (opts) => {
     if (!currentImage) return;
@@ -952,6 +968,7 @@ export default function Home() {
               {activeTab === 'curves' && (
                 <CurvesPanel
                   onApply={handleApplyCurves}
+                  onPreview={handlePreviewCurves}
                 />
               )}
 
