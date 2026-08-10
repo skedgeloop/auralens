@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   FiEye, FiLayers, FiZap, FiStar,
   FiSliders, FiFilter, FiZap as FiZapIcon,
-  FiCrop, FiImage, FiActivity,
+  FiCrop, FiImage, FiActivity, FiBarChart2, FiDroplet, FiTool,
 } from 'react-icons/fi';
 import UploadArea from '../src/components/UploadArea';
 import FilterControls from '../src/components/FilterControls';
@@ -11,20 +11,30 @@ import AIPanel from '../src/components/AIPanel';
 import Toolbar from '../src/components/Toolbar';
 import ComparisonSlider from '../src/components/ComparisonSlider';
 import SelectionTool from '../src/components/SelectionTool';
+import DodgeBurnTool from '../src/components/DodgeBurnTool';
 import AdjustmentPanel, { applyAdjustments } from '../src/components/AdjustmentPanel';
 import CurvesPanel from '../src/components/CurvesPanel';
 import ColorBalancePanel from '../src/components/ColorBalancePanel';
+import PalettePanel from '../src/components/PalettePanel';
 import WarpPanel from '../src/components/WarpPanel';
 import BlurPanel from '../src/components/BlurPanel';
+import FreqSepPanel from '../src/components/FreqSepPanel';
+import HistogramPanel from '../src/components/HistogramPanel';
+import FinishPanel from '../src/components/FinishPanel';
 import ExportDialog from '../src/components/ExportDialog';
 import EditTimeline from '../src/components/EditTimeline';
 import Toast from '../src/components/Toast';
+import ExifPanel from '../src/components/ExifPanel';
+import SharpenPanel from '../src/components/SharpenPanel';
 import {
   applyFilterToDataUrl, blendImages, FILTERS, FILTER_CATEGORIES,
   rotateImage, flipImage, getImageDimensions,
   applyHSL, applyColorBalance, applyPerspective, applyMeshWarp,
   applyBokehBlur, applyMotionBlur,
+  applyVignette, applyFilmGrain, frequencySeparate,
+  applyUnsharpMask,
 } from '../src/lib/imageFilters';
+import { readExif } from '../src/lib/exif';
 import { applyCurves, applyLevels } from '../src/lib/colorTools';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
@@ -44,6 +54,9 @@ const SIDEBAR_TABS = [
   { key: 'adjust', label: 'Adjust', icon: FiSliders },
   { key: 'curves', label: 'Curves', icon: FiActivity },
   { key: 'filter', label: 'Filters', icon: FiFilter },
+  { key: 'scope', label: 'Scope', icon: FiBarChart2 },
+  { key: 'palette', label: 'Palette', icon: FiDroplet },
+  { key: 'tools', label: 'Tools', icon: FiTool },
 ];
 
 export default function Home() {
@@ -81,6 +94,7 @@ export default function Home() {
   const [showExport, setShowExport] = useState(false);
   const [toast, setToast] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [exifData, setExifData] = useState(null);
   const [applying, setApplying] = useState(false);
   // Auto-apply the AI smart-enhance after analysis. Toggle OFF to work fully manually.
   const [autoEnhance, setAutoEnhance] = useState(true);
@@ -157,6 +171,7 @@ export default function Home() {
     setIsComparing(false);
     setDisplayedImage(dataUrl);
     setActiveTab('ai');
+    readExif(dataUrl).then(setExifData);
 
     // Run AI analysis + triple analysis on upload
     (async () => {
@@ -220,6 +235,7 @@ export default function Home() {
     setHistoryIndex(-1);
     setDisplayedImage(null);
     setEditSuggestions([]);
+    setExifData(null);
   }, []);
 
   // ---- Filters ----
@@ -265,6 +281,16 @@ export default function Home() {
     } catch (err) { console.error('Gradient failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
+  // ---- Unsharp mask (sharpen / clarity) — commits as a revertable step ----
+  const handleApplySharpen = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      const sharpened = await applyUnsharpMask(currentImage, opts);
+      pushSnapshot(sharpened, 'Sharpen');
+      showToast('Sharpen applied', 'success');
+    } catch (err) { console.error('Sharpen failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
+
   // ---- Selective selection (magic wand) — commits as a revertable step ----
   const handleApplySelectionEffect = useCallback(async (result, description) => {
     if (!result) return;
@@ -272,6 +298,15 @@ export default function Home() {
       pushSnapshot(result, description);
       showToast(`Applied ${description}`, 'success');
     } catch (err) { console.error('Selection edit failed:', err); }
+  }, [pushSnapshot, showToast]);
+
+  // ---- Dodge & burn — commits as a revertable step ----
+  const handleApplyDodgeBurn = useCallback(async (result) => {
+    if (!result) return;
+    try {
+      pushSnapshot(result, 'Dodge/Burn');
+      showToast('Dodge & burn applied', 'success');
+    } catch (err) { console.error('Dodge & burn failed:', err); }
   }, [pushSnapshot, showToast]);
 
   // Live preview of color grade — updates the display instantly on drag
@@ -316,6 +351,68 @@ export default function Home() {
     };
     clearTimeout(blurPreviewRef.current);
     blurPreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
+
+  // ---- Frequency separation — commits `combined` as a revertable step ----
+  const handleApplyFreqSep = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      const { combined } = await frequencySeparate(currentImage, opts);
+      if (!combined || combined === currentImage) return;
+      pushSnapshot(combined, 'Frequency separation');
+      showToast('Frequency separation applied', 'success');
+    } catch (err) { console.error('Frequency separation failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
+
+  // Live preview — updates the display instantly on drag (no history push).
+  const freqSepPreviewRef = useRef(null);
+  const handlePreviewFreqSep = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const { combined, low, high } = await frequencySeparate(base, opts);
+        setDisplayedImage(opts?.view === 'low' ? low : opts?.view === 'high' ? high : combined);
+      } catch (err) { console.error('Frequency separation preview failed:', err); }
+    };
+    clearTimeout(freqSepPreviewRef.current);
+    freqSepPreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
+
+  // ---- Vignette & film grain — commits both as one revertable step ----
+  const handleApplyFinish = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const { vignette = {}, grain = {} } = opts || {};
+    try {
+      let result = currentImage;
+      if (vignette.strength > 0) result = await applyVignette(result, vignette);
+      if (grain.amount > 0) result = await applyFilmGrain(result, grain);
+      if (result !== currentImage) {
+        pushSnapshot(result, 'Vignette & grain');
+        showToast('Finish applied', 'success');
+      } else {
+        showToast('No finish applied', 'info');
+      }
+    } catch (err) { console.error('Finish failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
+
+  // Live preview of vignette + grain — updates the display instantly on drag
+  // (no history push; only "apply" commits a step).
+  const finishPreviewRef = useRef(null);
+  const handlePreviewFinish = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const { vignette = {}, grain = {} } = opts || {};
+    const run = async () => {
+      try {
+        let result = base;
+        if (vignette.strength > 0) result = await applyVignette(result, vignette);
+        if (grain.amount > 0) result = await applyFilmGrain(result, grain);
+        setDisplayedImage(result);
+      } catch (err) { console.error('Finish preview failed:', err); }
+    };
+    clearTimeout(finishPreviewRef.current);
+    finishPreviewRef.current = setTimeout(run, 60); // debounce drag
   }, [currentImage]);
 
   // ---- Portrait retouch (skin, teeth, red-eye) — commits as a revertable step ----
@@ -566,6 +663,14 @@ export default function Home() {
                       naturalHeight={imageDimensions.height}
                     />
 
+                    {/* Dodge & burn tool */}
+                    <DodgeBurnTool
+                      imageSrc={currentImage}
+                      onApply={handleApplyDodgeBurn}
+                      naturalWidth={imageDimensions.width}
+                      naturalHeight={imageDimensions.height}
+                    />
+
                     {/* Analyzing overlay — smooth, single spinner (no stutter) */}
                     {isAnalyzing && (
                       <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/55">
@@ -800,6 +905,14 @@ export default function Home() {
                     onApplyBlur={handleApplyBlur}
                     onPreviewBlur={handlePreviewBlur}
                   />
+                  <FreqSepPanel
+                    onApply={handleApplyFreqSep}
+                    onPreview={handlePreviewFreqSep}
+                  />
+                  <FinishPanel
+                    onPreview={handlePreviewFinish}
+                    onApplyFinish={handleApplyFinish}
+                  />
                 </>
               )}
 
@@ -807,6 +920,10 @@ export default function Home() {
                 <CurvesPanel
                   onApply={handleApplyCurves}
                 />
+              )}
+
+              {activeTab === 'scope' && (
+                <HistogramPanel imageSrc={currentImage} />
               )}
 
               {activeTab === 'filter' && (
@@ -862,6 +979,17 @@ export default function Home() {
                   onAnalysisComplete={(analysis) => setAiAnalysis(analysis)}
                   onRetouchPortrait={handleRetouchPortrait}
                 />
+              )}
+
+              {activeTab === 'palette' && (
+                <PalettePanel imageSrc={currentImage} />
+              )}
+
+              {activeTab === 'tools' && (
+                <>
+                  <SharpenPanel onApplySharpen={handleApplySharpen} />
+                  <ExifPanel exif={exifData} />
+                </>
               )}
             </div>
 

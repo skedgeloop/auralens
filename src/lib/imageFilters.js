@@ -2,6 +2,8 @@
  * Image filter utilities for applying real-time filters using canvas.
  */
 import { floodFill } from './floodFill.mjs';
+import { medianCutPalette } from './medianCut.mjs';
+import { frequencyLayers } from './frequencyLayers.mjs';
 
 /**
  * Create a canvas with the image drawn on it
@@ -262,6 +264,67 @@ const blurDisk = (src, w, h, radius) => {
 };
 
 /**
+ * 1-D Gaussian kernel for unsharp masking. `radius` maps to sigma (clamped to
+ * at least 0.5 so the kernel is never degenerate).
+ */
+const gaussianKernel1D = (radius) => {
+  const sigma = Math.max(0.5, radius);
+  const half = Math.max(1, Math.round(radius));
+  const size = half * 2 + 1;
+  const kernel = new Float32Array(size);
+  let sum = 0;
+  for (let i = -half; i <= half; i++) {
+    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+    kernel[i + half] = v;
+    sum += v;
+  }
+  for (let i = 0; i < size; i++) kernel[i] /= sum;
+  return kernel;
+};
+
+/**
+ * Separable Gaussian blur on an RGBA pixel buffer (edge-clamped).
+ * Returns a new buffer; leaves `src` untouched.
+ */
+const gaussianBlur1D = (src, w, h, kernel) => {
+  const half = (kernel.length - 1) >> 1;
+  const len = src.length;
+  const tmp = new Float32Array(len);
+  const out = new Uint8ClampedArray(len);
+
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let k = 0; k < kernel.length; k++) {
+        const sx = x + k - half;
+        const i = (row + (sx < 0 ? 0 : sx >= w ? w - 1 : sx)) * 4;
+        const wt = kernel[k];
+        r += src[i] * wt; g += src[i + 1] * wt; b += src[i + 2] * wt; a += src[i + 3] * wt;
+      }
+      const o = (row + x) * 4;
+      tmp[o] = r; tmp[o + 1] = g; tmp[o + 2] = b; tmp[o + 3] = a;
+    }
+  }
+
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let k = 0; k < kernel.length; k++) {
+        const sy = y + k - half;
+        const i = ((sy < 0 ? 0 : sy >= h ? h - 1 : sy) * w + x) * 4;
+        const wt = kernel[k];
+        r += tmp[i] * wt; g += tmp[i + 1] * wt; b += tmp[i + 2] * wt; a += tmp[i + 3] * wt;
+      }
+      const o = (y * w + x) * 4;
+      out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = a;
+    }
+  }
+
+  return out;
+};
+
+/**
  * Apply a depth-of-field bokeh blur. A radial gradient depth mask keeps the
  * focus point sharp while pixels farther away fall off into a disk-blurred
  * background. Downscales to 50% for the blur pass when radius > 8.
@@ -357,6 +420,137 @@ export const applyMotionBlur = (imageSrc, { angle = 0, distance = 20 } = {}) => 
     return imageData;
   });
 };
+
+/**
+ * Frequency separation: split an image into a color/lighting (low-frequency)
+ * layer and a detail/texture (high-frequency) layer, plus a reconstruction.
+ * `low` is a gaussian-approximated (3 cascaded box passes) blurred copy;
+ * `high` is the per-pixel difference orig - low offset by +128 so it renders
+ * as a neutral-gray detail image; `combined` recombines them with
+ * `textureAmount` (0-100) scaling how much high-frequency detail is kept
+ * (100 = the original image).
+ * @param {string} imageSrc - Image data URL
+ * @param {{ blurRadius?: number, textureAmount?: number }} opts
+ *   blurRadius 1-20 (low-layer blur strength), textureAmount 0-100 (high-layer amount)
+ * @returns {Promise<{ low: string, high: string, combined: string }>}
+ */
+export const frequencySeparate = (imageSrc, { blurRadius = 5, textureAmount = 100 } = {}) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const w = img.width;
+        const h = img.height;
+        if (!w || !h) return resolve({ low: imageSrc, high: imageSrc, combined: imageSrc });
+
+        const srcCanvas = document.createElement('canvas');
+        srcCanvas.width = w;
+        srcCanvas.height = h;
+        const sctx = srcCanvas.getContext('2d');
+        sctx.drawImage(img, 0, 0);
+        const orig = new Uint8ClampedArray(sctx.getImageData(0, 0, w, h).data);
+
+        const radius = Math.max(1, Math.min(20, Math.round(blurRadius || 5)));
+        const lowPixels = blurDisk(orig, w, h, radius); // color/lighting layer
+
+        // high = orig - low + 128, combined = low + (high - 128) * amt
+        const amt = Math.max(0, Math.min(1, (textureAmount ?? 100) / 100));
+        const { high: highPixels, combined: combinedPixels } = frequencyLayers(orig, lowPixels, amt);
+
+        const toDataUrl = (pixels) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').putImageData(new ImageData(pixels, w, h), 0, 0);
+          return canvas.toDataURL('image/png');
+        };
+
+        resolve({
+          low: toDataUrl(lowPixels),
+          high: toDataUrl(highPixels),
+          combined: toDataUrl(combinedPixels),
+        });
+      } catch (e) {
+        resolve({ low: imageSrc, high: imageSrc, combined: imageSrc });
+      }
+    };
+    img.onerror = () => resolve({ low: imageSrc, high: imageSrc, combined: imageSrc });
+    img.src = imageSrc;
+  });
+
+/**
+ * Classic unsharp mask: sharp = orig + amount * (orig - gaussian(orig)).
+ * Threshold (0-255, pixel-diff) suppresses enhancement in smooth/noisy areas.
+ * For big images the Gaussian is computed on a downscaled copy and upscaled —
+ * blur is low-frequency so the loss is invisible, and it keeps the UI snappy.
+ * @param {string} imageSrc - Image data URL
+ * @param {{ amount?: number, radius?: number, threshold?: number }} opts
+ *   amount 0-3 (e.g. 0.5), radius 0.5-5 (Gaussian sigma in px), threshold 0-100
+ * @returns {Promise<string>} - Sharpened image data URL
+ */
+export const applyUnsharpMask = (imageSrc, { amount = 0.5, radius = 1, threshold = 0 } = {}) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const w = img.width;
+        const h = img.height;
+        if (!w || !h) return resolve(imageSrc);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const src = imageData.data;
+        const kernel = gaussianKernel1D(radius);
+        let blurred;
+
+        if (w * h <= 1500000) {
+          blurred = gaussianBlur1D(src, w, h, kernel);
+        } else {
+          const factor = Math.sqrt(1500000 / (w * h));
+          const sw = Math.max(16, Math.round(w * factor));
+          const sh = Math.max(16, Math.round(h * factor));
+          const small = document.createElement('canvas');
+          small.width = sw;
+          small.height = sh;
+          const sctx = small.getContext('2d');
+          sctx.drawImage(img, 0, 0, sw, sh);
+          const smallBlur = gaussianBlur1D(sctx.getImageData(0, 0, sw, sh).data, sw, sh, kernel);
+          blurred = new Uint8ClampedArray(src.length);
+          for (let y = 0; y < h; y++) {
+            const sy = (y * sh) / h;
+            for (let x = 0; x < w; x++) {
+              sampleBilinear(smallBlur, sw, sh, (x * sw) / w, sy, blurred, (y * w + x) * 4);
+            }
+          }
+        }
+
+        const a = amount;
+        const t = threshold;
+        for (let i = 0; i < src.length; i += 4) {
+          for (let c = 0; c < 3; c++) {
+            const orig = src[i + c];
+            const diff = orig - blurred[i + c];
+            if (Math.abs(diff) > t) {
+              const val = orig + a * diff;
+              src[i + c] = val < 0 ? 0 : val > 255 ? 255 : val;
+            }
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (e) {
+        resolve(imageSrc);
+      }
+    };
+    img.onerror = () => resolve(imageSrc);
+    img.src = imageSrc;
+  });
 
 /**
  * Apply a brightness boost filter
@@ -1133,6 +1327,136 @@ export const getImageDimensions = (imageSrc) =>
   });
 
 /**
+ * Compute 256-bin luminance + RGB histograms for an image.
+ * The image is downscaled to at most 512px on its longest edge so the
+ * analysis stays instant even on huge photos.
+ * @param {string} imageSrc - Image data URL
+ * @returns {Promise<{ luminance: number[], r: number[], g: number[], b: number[], avgLuminance: number, darkRatio: number, midRatio: number, brightRatio: number } | null>}
+ *   dark/mid/bright ratios are fractions of all pixels (0-1); dark <85, mid 85-170, bright >170.
+ */
+export const computeHistogram = (imageSrc) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 512 / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const d = ctx.getImageData(0, 0, w, h).data;
+
+        const luminance = new Array(256).fill(0);
+        const r = new Array(256).fill(0);
+        const g = new Array(256).fill(0);
+        const b = new Array(256).fill(0);
+        let sum = 0;
+        let count = 0;
+
+        for (let i = 0; i < d.length; i += 4) {
+          const R = d[i], G = d[i + 1], B = d[i + 2];
+          const lum = Math.round(0.299 * R + 0.587 * G + 0.114 * B);
+          luminance[lum]++;
+          r[R]++; g[G]++; b[B]++;
+          sum += lum;
+          count++;
+        }
+
+        const total = count || 1;
+        let dark = 0, mid = 0, bright = 0;
+        for (let v = 0; v < 256; v++) {
+          if (v < 85) dark += luminance[v];
+          else if (v <= 170) mid += luminance[v];
+          else bright += luminance[v];
+        }
+
+        resolve({
+          luminance, r, g, b,
+          avgLuminance: sum / total,
+          darkRatio: dark / total,
+          midRatio: mid / total,
+          brightRatio: bright / total,
+        });
+      } catch (e) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = imageSrc;
+  });
+
+/**
+ * Compute a 2D chroma vectorscope (R-Y vs B-Y scatter) as a 256×256 PNG data URL.
+ * Pixels are sampled on a grid capped at 128px so this stays fast; each grid
+ * cell's density is shown on a log scale, tinted by its chroma hue.
+ * @param {string} imageSrc - Image data URL
+ * @returns {Promise<string>} - 256×256 scope PNG, or '' on failure
+ */
+export const computeVectorscope = (imageSrc) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 128 / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const d = ctx.getImageData(0, 0, w, h).data;
+
+        const S = 256;
+        const grid = new Float32Array(S * S);
+        for (let i = 0; i < d.length; i += 4) {
+          const R = d[i], G = d[i + 1], B = d[i + 2];
+          const Y = 0.299 * R + 0.587 * G + 0.114 * B;
+          const u = B - Y; // -255..255
+          const v = R - Y; // -255..255
+          const xx = Math.min(S - 1, Math.max(0, Math.round(((u / 255) + 1) * (S - 1) / 2)));
+          const yy = Math.min(S - 1, Math.max(0, Math.round(((v / 255) + 1) * (S - 1) / 2)));
+          grid[yy * S + xx]++;
+        }
+
+        let max = 0;
+        for (let i = 0; i < grid.length; i++) max = Math.max(max, grid[i]);
+        const logMax = Math.log(Math.max(1, max));
+
+        const scope = document.createElement('canvas');
+        scope.width = S;
+        scope.height = S;
+        const sctx = scope.getContext('2d');
+        const out = sctx.createImageData(S, S);
+        const od = out.data;
+        for (let yy = 0; yy < S; yy++) {
+          for (let xx = 0; xx < S; xx++) {
+            const c = grid[yy * S + xx];
+            if (c <= 0) continue;
+            const i = (yy * S + xx) * 4;
+            const t = Math.max(0, Math.min(1, Math.log(1 + c) / logMax));
+            const hue = Math.atan2((2 * yy / (S - 1)) - 1, (2 * xx / (S - 1)) - 1); // -PI..PI
+            const [rr, gg, bb] = hslToRgb(((hue * 180 / Math.PI) + 360) % 360, 1, 0.25 + 0.55 * t);
+            od[i] = rr; od[i + 1] = gg; od[i + 2] = bb;
+            od[i + 3] = Math.round(255 * t);
+          }
+        }
+        sctx.putImageData(out, 0, 0);
+        resolve(scope.toDataURL('image/png'));
+      } catch (e) {
+        resolve('');
+      }
+    };
+    img.onerror = () => resolve('');
+    img.src = imageSrc;
+  });
+
+/**
  * Magic wand / selective selection: flood-fill from (startX, startY) using
  * Euclidean RGB distance from the seed pixel. Uses an explicit 8-way stack
  * (see floodFill.mjs) so large images never overflow the call stack.
@@ -1419,6 +1743,185 @@ export const applyHueBand = (imageSrc, { hueStart = 0, hueEnd = 360, satScale = 
 };
 
 /**
+ * Deterministic seeded PRNG output in [0,1) from an integer seed (no Math.random).
+ */
+const seededRandom = (seed) => {
+  seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+/**
+ * Apply a radial vignette: pixels darken toward the edges. Each pixel's
+ * darkening = strength * smoothstep over the band [radius, radius + feather]
+ * of the normalized distance from center (0 at center, 1 at the corners).
+ * @param {string} imageSrc - Image data URL
+ * @param {{ strength?: number, radius?: number, feather?: number }} opts
+ *   strength 0-100 (darkening amount), radius 0-1 (where vignette starts),
+ *   feather 0-1 (softness of the falloff).
+ * @returns {Promise<string>} - Vignetted image data URL
+ */
+export const applyVignette = async (imageSrc, { strength = 40, radius = 0.5, feather = 0.7 } = {}) => {
+  if (!imageSrc) return imageSrc;
+  const { canvas, ctx } = await prepareCanvas(imageSrc);
+  const w = canvas.width;
+  const h = canvas.height;
+  if (!w || !h) return imageSrc;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const amt = clamp01(strength / 100);
+  const start = clamp01(radius);
+  const soft = Math.max(0.001, clamp01(feather));
+  const maxDist = Math.SQRT1_2; // sqrt(0.5^2 + 0.5^2) — center to a corner
+  for (let y = 0; y < h; y++) {
+    const ny = y / h - 0.5;
+    for (let x = 0; x < w; x++) {
+      const nx = x / w - 0.5;
+      const dist = Math.sqrt(nx * nx + ny * ny) / maxDist;
+      const t = clamp01((dist - start) / soft);
+      const m = 1 - amt * t * t * (3 - 2 * t); // smoothstep
+      const i = (y * w + x) * 4;
+      d[i] *= m;
+      d[i + 1] *= m;
+      d[i + 2] *= m;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+};
+
+/**
+ * Apply deterministic per-pixel film grain (±amount). Noise is seeded by pixel
+ * position so previews match the committed result exactly. `size` groups the
+ * noise into size×size blocks for chunkier grain.
+ * @param {string} imageSrc - Image data URL
+ * @param {{ amount?: number, size?: number }} opts
+ *   amount 0-100 (noise amplitude), size 1-3 (grain block size).
+ * @returns {Promise<string>} - Grained image data URL
+ */
+export const applyFilmGrain = async (imageSrc, { amount = 20, size = 1 } = {}) => {
+  if (!imageSrc) return imageSrc;
+  const { canvas, ctx } = await prepareCanvas(imageSrc);
+  const w = canvas.width;
+  const h = canvas.height;
+  if (!w || !h) return imageSrc;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const amp = clamp01(amount / 100) * 255;
+  const sz = Math.max(1, Math.min(3, Math.round(size) || 1));
+  for (let y = 0; y < h; y++) {
+    const by = Math.floor(y / sz);
+    for (let x = 0; x < w; x++) {
+      const seed = (by * 73856093) ^ (Math.floor(x / sz) * 19349663);
+      const noise = (seededRandom(seed) - 0.5) * 2 * amp;
+      const i = (y * w + x) * 4;
+      d[i] = clampByte(d[i] + noise);
+      d[i + 1] = clampByte(d[i + 1] + noise);
+      d[i + 2] = clampByte(d[i + 2] + noise);
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+};
+
+/**
+ * Soft tonal-range gate for dodge & burn: returns 1 deep inside the chosen
+ * band (shadows <85, midtones 85-170, highlights >170) and fades to 0 across
+ * a ~30-luma transition at each band edge.
+ */
+const toneGate = (lum, range) => {
+  const FADE = 30;
+  if (range === 'shadows') {
+    return lum <= 85 ? 1 : lum < 85 + FADE ? 1 - (lum - 85) / FADE : 0;
+  }
+  if (range === 'highlights') {
+    return lum >= 170 ? 1 : lum > 170 - FADE ? (lum - (170 - FADE)) / FADE : 0;
+  }
+  // midtones
+  if (lum < 85 - FADE) return 0;
+  if (lum <= 85) return (lum - (85 - FADE)) / FADE;
+  if (lum <= 170) return 1;
+  if (lum < 170 + FADE) return 1 - (lum - 170) / FADE;
+  return 0;
+};
+
+/**
+ * Dodge & Burn — lighten (dodge) or darken (burn) pixels within radial brush
+ * strokes, gated to a tonal range with soft edges. For each stroke, every
+ * pixel inside the brush radius is pushed toward white (dodge) or black
+ * (burn) by `strength`, scaled by a soft radial falloff and the tonal gate.
+ * @param {string} imageSrc - Image data URL
+ * @param {{ strokes: Array<{ x, y, radius, strength, mode: 'dodge'|'burn', range: 'shadows'|'midtones'|'highlights' }> }} opts
+ * @returns {Promise<string>} - New image data URL
+ */
+export const applyDodgeBurn = (imageSrc, { strokes = [] } = {}) => {
+  if (!strokes.length) return Promise.resolve(imageSrc);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const w = img.width;
+      const h = img.height;
+      if (!w || !h) return resolve(imageSrc);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const d = imageData.data;
+
+      for (const s of strokes) {
+        const radius = Math.max(1, s.radius || 40);
+        const strength = Math.max(0, Math.min(1, s.strength ?? 0.5));
+        const mode = s.mode === 'burn' ? 'burn' : 'dodge';
+        const range = s.range || 'midtones';
+        const cx = s.x;
+        const cy = s.y;
+        const r2 = radius * radius;
+
+        // Only walk the stroke's bounding box.
+        const x0 = Math.max(0, Math.floor(cx - radius));
+        const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+        const y0 = Math.max(0, Math.floor(cy - radius));
+        const y1 = Math.min(h - 1, Math.ceil(cy + radius));
+
+        for (let y = y0; y <= y1; y++) {
+          const dy = y - cy;
+          const dy2 = dy * dy;
+          for (let x = x0; x <= x1; x++) {
+            const dx = x - cx;
+            const dist2 = dx * dx + dy2;
+            if (dist2 > r2) continue;
+            const i = (y * w + x) * 4;
+            const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const gate = toneGate(lum, range);
+            if (gate <= 0) continue;
+            const amount = strength * gate * (1 - Math.sqrt(dist2) / radius);
+            if (amount <= 0) continue;
+            if (mode === 'dodge') {
+              d[i]     = d[i]     + (255 - d[i]) * amount;
+              d[i + 1] = d[i + 1] + (255 - d[i + 1]) * amount;
+              d[i + 2] = d[i + 2] + (255 - d[i + 2]) * amount;
+            } else {
+              d[i]     = d[i]     * (1 - amount);
+              d[i + 1] = d[i + 1] * (1 - amount);
+              d[i + 2] = d[i + 2] * (1 - amount);
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(imageSrc);
+    img.src = imageSrc;
+  });
+};
+
+/**
  * Load an image element from a source (data URL or URL)
  * @param {string} src - Image source
  * @returns {Promise<HTMLImageElement>}
@@ -1467,6 +1970,38 @@ export const createFilterPreviews = async (imageSrc, width = 100) => {
   return previews;
 };
 
+/**
+ * Extract the `count` most dominant colors from an image.
+ * Median-cut quantization over a downscaled (max 100×100) pixel buffer so
+ * huge images stay fast.
+ * @param {string} imageSrc - Image data URL
+ * @param {number} count - Number of colors to extract (default 5)
+ * @returns {Promise<{ hex: string, rgb: [number, number, number], share: number }[]>}
+ *   Dominant colors sorted by share (descending).
+ */
+export const extractPalette = (imageSrc, count = 5) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 100 / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(medianCutPalette(ctx.getImageData(0, 0, w, h).data, count));
+      } catch (e) {
+        resolve([]);
+      }
+    };
+    img.onerror = () => resolve([]);
+    img.src = imageSrc;
+  });
+
 export const FILTER_CATEGORIES = [
   { key: 'all', label: 'All' },
   { key: 'classic', label: 'Classic' },
@@ -1499,6 +2034,8 @@ export default {
   blendImages,
   rotateImage,
   flipImage,
+  frequencySeparate,
+  applyUnsharpMask,
   cropImage,
   applyPerspective,
   applyMeshWarp,
@@ -1508,11 +2045,17 @@ export default {
   invertMask,
   maskToDataUrl,
   applyFilterToDataUrl,
+  computeHistogram,
+  computeVectorscope,
   applyHSL,
   applyColorBalance,
   applyHueBand,
+  applyVignette,
+  applyFilmGrain,
+  applyDodgeBurn,
   loadImage,
   createFilterPreviews,
+  extractPalette,
   FILTERS,
   FILTER_CATEGORIES,
   prepareCanvas,
