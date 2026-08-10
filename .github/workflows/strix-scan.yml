@@ -1,0 +1,26 @@
+name: Strix AI Penetration Test
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for diff-based scanning
+
+      - name: Install Strix
+        run: curl -sSL https://strix.ai/install | bash
+
+      - name: Run Strix Security Scan
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          strix -n -t ./ --scan-mode quick
