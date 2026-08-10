@@ -520,9 +520,10 @@ export default function Home() {
     sidebarResize.current = { startX: e.clientX, startW: sidebarWidth };
     const onMove = (ev) => {
       if (!sidebarResize.current) return;
-      // dragging left edge: dx positive = wider
+      // Handle sits on the sidebar's LEFT edge. Dragging the handle RIGHT
+      // moves the left edge rightward => panel gets NARROWER. So negate dx.
       const dx = ev.clientX - sidebarResize.current.startX;
-      setSidebarWidth(Math.max(240, Math.min(560, sidebarResize.current.startW + dx)));
+      setSidebarWidth(Math.max(240, Math.min(560, sidebarResize.current.startW - dx)));
     };
     const onUp = () => {
       sidebarResize.current = null;
