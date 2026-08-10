@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState } from 'react';
 import { FiX, FiDownload, FiShare2 } from 'react-icons/fi';
 

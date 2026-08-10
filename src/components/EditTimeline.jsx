@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React from 'react';
 import { FiFilter, FiSliders, FiCrop, FiRotateCw, FiMaximize2, FiZap, FiLayers, FiMove, FiActivity } from 'react-icons/fi';
 

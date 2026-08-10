@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FiSun, FiMoon, FiCheck, FiCornerUpLeft, FiCornerUpRight, FiCornerDownLeft, FiCornerDownRight } from 'react-icons/fi';
 import { applyDodgeBurn } from '../lib/imageFilters';

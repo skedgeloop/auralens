@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Pure median-cut color quantization core. No DOM, no I/O — Node-testable.
  * Reduces a set of opaque RGBA pixels to `count` dominant colors by repeatedly

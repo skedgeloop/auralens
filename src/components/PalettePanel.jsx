@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiRefreshCcw, FiCopy } from 'react-icons/fi';
 import { extractPalette } from '../lib/imageFilters';

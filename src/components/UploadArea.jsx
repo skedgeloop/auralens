@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FiUpload, FiX, FiImage } from 'react-icons/fi';

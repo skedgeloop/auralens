@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   FiEye, FiLayers, FiZap, FiStar,

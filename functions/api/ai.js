@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * AuraLens AI — Cloudflare Pages Function (runs at auralens.pages.dev/api/ai).
  * Same logic as the old standalone worker, served from the Pages site itself.

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Multi-model AI analysis with full result breakdown.
  * Shows ALL model results, not just the first that works.

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React from 'react';
 import {
   FiRefreshCw, FiDownload, FiRotateCcw, FiRotateCw,

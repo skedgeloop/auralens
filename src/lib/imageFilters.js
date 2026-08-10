@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Image filter utilities for applying real-time filters using canvas.
  */

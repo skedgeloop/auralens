@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useEffect, useRef } from 'react';
 import { FiBarChart2 } from 'react-icons/fi';
 import { computeHistogram, computeVectorscope } from '../lib/imageFilters';

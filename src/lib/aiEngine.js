@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * AI Engine — analyzes images and suggests optimal edits.
  * This is the "brain" that makes the editor feel intelligent.

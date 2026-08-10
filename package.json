@@ -2,9 +2,15 @@
   "name": "ai-photo-editor",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0 OR Commercial",
+  "author": {
+    "name": "SKEdgeloop",
+    "email": "skedgeloop@proton.me",
+    "url": "https://github.com/skedgeloop"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/inline-css.mjs",
+    "build": "next build && node scripts/inline-css.mjs && node scripts/stamp-provenance.mjs",
     "start": "next start",
     "lint": "next lint"
   },

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React from 'react';
 import { FiZap, FiCheck } from 'react-icons/fi';
 

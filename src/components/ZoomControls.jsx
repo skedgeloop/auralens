@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React from 'react';
 import { FiZoomIn, FiZoomOut, FiMaximize2 } from 'react-icons/fi';
 

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FiCheck, FiRotateCcw } from 'react-icons/fi';
 import { buildCurveLut } from '../lib/colorTools';

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import Document, { Html, Head, Main, NextScript } from 'next/document'
 
 class MyDocument extends Document {

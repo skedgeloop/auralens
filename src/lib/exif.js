@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Minimal hand-rolled EXIF reader for JPEG data URLs. No libraries.
  *

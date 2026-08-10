@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Pure flood-fill (magic wand) core. No DOM, no I/O — Node-testable.
  * Fills a Uint8 mask (1 = selected) from (startX, startY), comparing each

@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useCallback } from 'react';
 import { FiCheck } from 'react-icons/fi';
 

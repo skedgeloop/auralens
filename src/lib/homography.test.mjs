@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Self-check for the homography math in imageFilters.js.
  * Run: node src/lib/homography.test.mjs

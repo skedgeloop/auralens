@@ -1,15 +1,7 @@
-/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
-// Post-build performance cleanup for the static export:
-//  1. Inline the small critical CSS into index.html (kills the render-blocking
-//     stylesheet request — Lighthouse "Render-blocking resources").
-//  2. Remove the now-dead <link rel="preload"> to the inlined CSS.
-//  3. Remove the external Google Fonts stylesheet link — Next already inlines
-//     its @font-face rules, so the network request is redundant.
-//  4. Remove the legacy <script nomodule> polyfills chunk (91KB) — modern
-//     browsers have flat/flatMap/fromEntries/trimStart/trimEnd natively.
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { join, dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'crypto';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'out');
@@ -33,14 +25,27 @@ for (const m of cssLinks) {
   inlinedCount++;
 }
 
-// 2. Remove dead preload to the now-inlined CSS
+// 2. Remove the now-dead preload to the inlined CSS
 html = html.replace(/<link[^>]*rel="preload"[^>]*\/_next\/static\/css\/[^"]+\.css"[^>]*>/g, '');
 
-// 3. Remove external Google Fonts link (redundant — @font-face already inline)
+// 3. Remove the external Google Fonts stylesheet link — Next already inlines its
+// @font-face rules, so the network request is redundant and render-blocking.
 html = html.replace(/<link[^>]*rel="stylesheet"[^>]*href="https:\/\/fonts\.googleapis\.com[^>]*>/g, '');
 
-// 4. Remove the legacy polyfills script tag
+// 4. Remove the legacy polyfills chunk script (91KB) — modern browsers have
+// flat/flatMap/fromEntries/trimStart/trimEnd natively.
 html = html.replace(/<script[^>]*nomodule[^>]*src="[^"]*polyfills-[^"]*"[^>]*><\/script>/g, '');
 
+// 6. Inject provenance comment in <head>
+const watermark = `<!-- AURA-PROVENANCE:${Buffer.from(
+  JSON.stringify({
+    origin: 'AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens',
+    build: new Date().toISOString(),
+    license: 'AGPL-3.0 OR Commercial'
+  }).toString('base64')
+)} -->\n`;
+
+html = html.replace(/<head[^>]*>/, match => match + '\n' + watermark);
+
 writeFileSync(htmlPath, html, 'utf8');
-console.log(`inlined ${inlinedCount} CSS file(s); removed dead preload + fonts link + polyfills script`);
+console.log(`inlined ${inlinedCount} CSS file(s), removed dead preload + fonts link + polyfills`);

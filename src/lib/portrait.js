@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Portrait retouching — skin smoothing, teeth whitening, red-eye correction.
  * Pure client-side pixel processing (no API calls). Uses face-api landmarks

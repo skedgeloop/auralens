@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Runnable self-check for the flood-fill core (no frameworks, no DOM).
  * Run: node scripts/floodFill.test.mjs

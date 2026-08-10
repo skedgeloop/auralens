@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Curves & Levels color tools — pure Canvas 2D, no dependencies.
  * Follows the same Image→canvas→pixels→dataURL pattern as imageFilters.js.

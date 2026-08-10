@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 /**
  * Pure frequency-separation pixel math (no DOM, no canvas) — Node-runnable.
  *

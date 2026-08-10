@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useEffect, useState } from 'react';
 import { createFilterPreviews } from '../lib/imageFilters';
 

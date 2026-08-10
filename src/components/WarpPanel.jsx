@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiCheck, FiMove } from 'react-icons/fi';
 import { getImageDimensions } from '../lib/imageFilters';

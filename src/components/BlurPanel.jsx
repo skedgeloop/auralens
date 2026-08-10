@@ -1,3 +1,4 @@
+/* AURA-ORIGIN:skedgeloop@proton.me|github:skedgeloop|auralens */
 import React, { useState } from 'react';
 import { FiCheck, FiRotateCcw, FiAperture, FiMove } from 'react-icons/fi';
 
