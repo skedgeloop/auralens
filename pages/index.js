@@ -46,6 +46,7 @@ export default function Home() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisReady, setAiAnalysisReady] = useState(false);
+  const [editSuggestions, setEditSuggestions] = useState([]);
   const [tripleAi, setTripleAi] = useState(null);
   const [aiTier, setAiTier] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(true);
