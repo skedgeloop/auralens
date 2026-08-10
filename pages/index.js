@@ -75,6 +75,8 @@ export default function Home() {
   const [showAiPanel, setShowAiPanel] = useState(true);
   const [expandAiPanel, setExpandAiPanel] = useState(false);
   const [aiPanelWidth, setAiPanelWidth] = useState(300); // px, adjustable
+  const [sidebarWidth, setSidebarWidth] = useState(320); // px, drag-resizable right panel
+  const sidebarResize = useRef(null);
 
   // Adjustments (non-destructive, computed on top of current image)
   const [adjustments, setAdjustments] = useState({
@@ -512,6 +514,25 @@ export default function Home() {
     } catch (err) { console.error('Warp failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
+  // ---- Right sidebar drag-resize ----
+  const startSidebarResize = useCallback((e) => {
+    e.preventDefault();
+    sidebarResize.current = { startX: e.clientX, startW: sidebarWidth };
+    const onMove = (ev) => {
+      if (!sidebarResize.current) return;
+      // dragging left edge: dx positive = wider
+      const dx = ev.clientX - sidebarResize.current.startX;
+      setSidebarWidth(Math.max(240, Math.min(560, sidebarResize.current.startW + dx)));
+    };
+    const onUp = () => {
+      sidebarResize.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [sidebarWidth]);
+
   // ---- Zoom ----
   const handleZoomIn = useCallback(() => setZoom((z) => Math.min(z + 0.25, 4)), []);
   const handleZoomOut = useCallback(() => setZoom((z) => Math.max(z - 0.25, 0.25)), []);
@@ -865,8 +886,18 @@ export default function Home() {
             )}
           </div>
 
-          {/* --- Right sidebar --- */}
-          <div className="w-[320px] border-l border-[var(--border)] bg-[var(--bg-elevated)] flex flex-col overflow-hidden shrink-0">
+          {/* --- Right sidebar (drag-resizable) --- */}
+          <div className="relative border-l border-[var(--border)] bg-[var(--bg-elevated)] flex flex-col overflow-hidden shrink-0"
+            style={{ width: `${sidebarWidth}px` }}>
+            {/* Drag handle on the left edge to resize the whole panel */}
+            <div
+              onMouseDown={startSidebarResize}
+              className="absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize z-40 group flex items-center justify-center"
+              title="Drag to resize panel"
+              aria-label="Resize edit panel"
+            >
+              <div className="w-1 h-10 rounded-full bg-[var(--border)] group-hover:bg-[var(--pink)] transition-colors" />
+            </div>
             {/* Tabs */}
             <div className="flex border-b border-[var(--border)] px-2">
               {SIDEBAR_TABS.map((tab) => (
