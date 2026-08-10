@@ -40,6 +40,7 @@ import { applyCurves, applyLevels } from '../src/lib/colorTools';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
 import { applyColorGrade, smartAutoEnhance } from '../src/lib/realAi';
+import { neuralEnhance } from '../src/lib/neuralEnhance';
 import { retouchPortrait } from '../src/lib/portrait';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
@@ -216,7 +217,19 @@ export default function Home() {
     // Show a brief "applying recommended changes" state
     setApplying(true);
     try {
-      const enhanced = await smartAutoEnhance(src);
+      // Scene-aware: feed the AI's aura/objects/face results so the enhance
+      // picks a per-scene grade (portrait / landscape / low-light / default).
+      const scene = {
+        vibe: tripleAi?.vibe?.topLabel,
+        objects: tripleAi?.objects?.objects?.map(o => o.label) || [],
+        hasFace: !!tripleAi?.face?.hasFace,
+      };
+      let enhanced = await smartAutoEnhance(src, scene);
+      // Neural pass — only if it succeeds and actually improves; never breaks.
+      try {
+        const neural = await neuralEnhance(enhanced);
+        if (neural && neural !== enhanced) enhanced = neural;
+      } catch (e) { /* keep scene-aware result */ }
       if (enhanced && enhanced !== src) {
         // Push as a revertable step so the user can undo it
         setEditHistory((prev) => {
@@ -230,7 +243,7 @@ export default function Home() {
       }
     } catch (err) { console.error('Auto-enhance failed:', err); }
     finally { setApplying(false); }
-  }, [historyIndex, autoEnhance]);
+  }, [historyIndex, autoEnhance, tripleAi]);
 
   const handleNewImage = useCallback(() => {
     setOriginalImage(null);

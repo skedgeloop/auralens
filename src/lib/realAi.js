@@ -3,6 +3,10 @@
  * Real AI features — actual neural networks, not pixel math.
  */
 
+import { pickEnhancePreset } from './enhancePresets.mjs';
+
+export { pickEnhancePreset };
+
 /**
  * Load TensorFlow.js body segmentation model for background blur.
  * This is a REAL neural network that detects people and segments them.
@@ -106,8 +110,17 @@ export const applyBackgroundBlur = async (imageSrc, blurAmount = 10) => {
 /**
  * Smart auto-enhance — a multi-stage professional pipeline.
  * White balance → contrast stretch → tone curve → vibrance → clarity → tint.
+ *
+ * Scene-aware: pass an optional { vibe, objects, hasFace } descriptor to pick
+ * a preset recipe. Portraits get a gentle warm tint + strong skin protection,
+ * landscapes get more vibrancy + a cool balance, dark shots get shadow
+ * recovery. No scene → the original balanced recipe. Every multiplier stays
+ * modest and output is always clamped 0-255.
+ * @param {string} imageSrc
+ * @param {{vibe?:string, objects?:string[], hasFace?:boolean}} [scene]
+ * @returns {Promise<string>} enhanced data URL (or the input on error)
  */
-export const smartAutoEnhance = (imageSrc) => {
+export const smartAutoEnhance = (imageSrc, scene = {}) => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'Anonymous';
@@ -127,16 +140,28 @@ export const smartAutoEnhance = (imageSrc) => {
       const gHistogram = new Array(256).fill(0);
       const bHistogram = new Array(256).fill(0);
       const pixelCount = d.length / 4;
+      let avgLum = 0;
 
       for (let i = 0; i < d.length; i += 4) {
         const lum = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
         lumHistogram[Math.min(255, lum)]++;
+        avgLum += lum;
         rHistogram[d[i]]++;
         gHistogram[d[i + 1]]++;
         bHistogram[d[i + 2]]++;
       }
+      avgLum /= pixelCount;
 
-      // --- Step 2: auto white balance (gray world, conservative) ---
+      // --- Step 2: scene-aware preset (no scene → default balanced recipe) ---
+      const p = pickEnhancePreset(scene, avgLum);
+      const warmth = p.warmth;
+      const vibrance = p.vibrance;
+      const clarity = p.clarity;
+      const contrast = p.contrast;
+      const shadowLift = p.shadowLift;
+      const skinGuardStrength = p.skinGuardStrength;
+
+      // --- Step 3: auto white balance (gray world, conservative) ---
       let avgR = 0, avgG = 0, avgB = 0;
       for (let i = 0; i < 256; i++) {
         avgR += i * rHistogram[i];
@@ -150,7 +175,7 @@ export const smartAutoEnhance = (imageSrc) => {
       const bGain = grayAvg / (avgB || 1);
       const wbStrength = 0.35;
 
-      // --- Step 3: contrast stretch (clip 0.5% each end) ---
+      // --- Step 4: contrast stretch (clip 0.5% each end) ---
       let lowLum = 0, highLum = 255;
       const clipPercentage = 0.005;
       const clipCount = Math.floor(pixelCount * clipPercentage);
@@ -160,20 +185,22 @@ export const smartAutoEnhance = (imageSrc) => {
       for (let i = 255; i >= 0; i--) { count += lumHistogram[i]; if (count >= clipCount) { highLum = i; break; } }
       const contrastRange = (highLum - lowLum) || 1;
 
-      // --- Step 4: precomputed tone curve (soft S-curve, gentle) ---
+      // --- Step 5: precomputed tone curve (soft S-curve + shadow recovery) ---
       const curve = new Array(256);
       for (let v = 0; v < 256; v++) {
         // stretch
         let t = ((v - lowLum) / contrastRange) * 255;
         t = Math.max(0, Math.min(255, t));
-        // S-curve: push midtones slightly
+        // S-curve: push midtones slightly (strength scene-dependent)
         const x = t / 255;
-        let y = x + 0.06 * Math.sin(x * Math.PI);
+        let y = x + contrast * Math.sin(x * Math.PI);
+        // shadow recovery: lift the low end, vanishes at highlights
+        y += shadowLift * Math.pow(1 - x, 2);
         y = Math.max(0, Math.min(1, y));
         curve[v] = y * 255;
       }
 
-      // --- Step 5: apply per-pixel ---
+      // --- Step 6: apply per-pixel ---
       for (let i = 0; i < d.length; i += 4) {
         let r = d[i], g = d[i + 1], b = d[i + 2];
 
@@ -181,6 +208,9 @@ export const smartAutoEnhance = (imageSrc) => {
         r = r * (1 + (rGain - 1) * wbStrength);
         g = g * (1 + (gGain - 1) * wbStrength);
         b = b * (1 + (bGain - 1) * wbStrength);
+
+        // scene warmth tint (positive = warm/amber, negative = cool/teal)
+        if (warmth !== 0) { r += warmth * 40; b -= warmth * 40; }
 
         // clamp before tone curve
         r = Math.max(0, Math.min(255, r));
@@ -195,9 +225,9 @@ export const smartAutoEnhance = (imageSrc) => {
         // vibrance: boost saturation but protect skin-ish tones
         const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
         const sat = mx > 0 ? (mx - mn) / mx : 0;
-        // lower boost for faces (high red relative to others) to protect skin
-        const skinGuard = r > 90 && g > 50 && b > 30 && r > g && r > b ? 0.6 : 1;
-        const vib = 1 + 0.12 * skinGuard;
+        // stronger skinGuardStrength → less saturation boost on skin pixels
+        const skinGuard = r > 90 && g > 50 && b > 30 && r > g && r > b ? 1 - skinGuardStrength : 1;
+        const vib = 1 + vibrance * skinGuard;
         if (sat < 0.6) {
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
           r = lum + vib * (r - lum);
@@ -208,9 +238,9 @@ export const smartAutoEnhance = (imageSrc) => {
         // clarity: subtle local-contrast push via channel spread
         const mx2 = Math.max(r, g, b), mn2 = Math.min(r, g, b);
         const cLum = (mx2 + mn2) / 2;
-        r = cLum + (r - cLum) * 1.05;
-        g = cLum + (g - cLum) * 1.05;
-        b = cLum + (b - cLum) * 1.05;
+        r = cLum + (r - cLum) * (1 + clarity);
+        g = cLum + (g - cLum) * (1 + clarity);
+        b = cLum + (b - cLum) * (1 + clarity);
 
         d[i] = Math.max(0, Math.min(255, r));
         d[i + 1] = Math.max(0, Math.min(255, g));
