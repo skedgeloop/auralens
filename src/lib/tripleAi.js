@@ -103,21 +103,30 @@ export const runTripleAnalysis = async (imageSrc) => {
 // SERVER AI
 // ═══════════════════════════════════════════
 async function serverAI(imageSrc) {
-  const response = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: imageSrc }),
-  });
-  if (!response.ok) throw new Error(`Worker ${response.status}`);
-  const data = await response.json();
-  return {
-    success: true,
-    data: {
-      face: data.emotion || { hasFace: false, emotions: {}, faceCount: 0 },
-      vibe: data.vibe || { topLabel: 'unknown', topScore: 0, scores: {}, hasVibe: false },
-      objects: data.objects || { objects: [], hasObjects: false },
-    },
-  };
+  // Retry once on transient failure so the fixed server models are preferred
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageSrc }),
+      });
+      if (!response.ok) throw new Error(`Worker ${response.status}`);
+      const data = await response.json();
+      return {
+        success: true,
+        data: {
+          face: data.emotion || { hasFace: false, emotions: {}, faceCount: 0 },
+          vibe: data.vibe || { topLabel: 'unknown', topScore: 0, scores: {}, hasVibe: false },
+          objects: data.objects || { objects: [], hasObjects: false },
+        },
+      };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 
 // ═══════════════════════════════════════════
