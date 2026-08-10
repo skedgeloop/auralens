@@ -13,6 +13,7 @@ const CHANNELS = [
 
 /** Draw one series of 256 bar counts into a canvas (null counts clears it). */
 const drawBars = (canvas, counts, color) => {
+  if (!canvas) return; // canvas not mounted yet (hist still loading) — avoid crash
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
