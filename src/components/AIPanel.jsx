@@ -5,10 +5,11 @@ import {
 } from 'react-icons/fi';
 import { analyzeImage, processNaturalLanguage } from '../lib/aiEngine';
 import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
+import PortraitPanel from './PortraitPanel';
 
 export default function AIPanel({
   imageSrc, onApplySuggestion, onAutoEnhance, onNaturalLanguage,
-  isAnalyzing, onAnalysisComplete, tripleAi, aiTier,
+  isAnalyzing, onAnalysisComplete, tripleAi, aiTier, onRetouchPortrait,
 }) {
   const [analysis, setAnalysis] = useState(null);
   const [nlInput, setNlInput] = useState('');
@@ -324,6 +325,8 @@ export default function AIPanel({
               <FiMaximize2 className="w-4 h-4" /> auto-fix sliders
             </button>
             <p className="text-[10px] text-[var(--text-dim)] text-center">adjusts brightness/contrast/sat from histogram</p>
+
+            <PortraitPanel imageSrc={imageSrc} onApplyRetouch={onRetouchPortrait} />
 
             {analysis?.suggestions?.length > 0 && (
               <div>

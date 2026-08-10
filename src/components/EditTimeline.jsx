@@ -1,9 +1,9 @@
 import React from 'react';
-import { FiFilter, FiSliders, FiCrop, FiRotateCw, FiMaximize2, FiZap } from 'react-icons/fi';
+import { FiFilter, FiSliders, FiCrop, FiRotateCw, FiMaximize2, FiZap, FiLayers, FiMove, FiActivity } from 'react-icons/fi';
 
 const EDIT_ICONS = {
   filter: FiFilter, adjust: FiSliders, crop: FiCrop,
-  rotate: FiRotateCw, flip: FiMaximize2, ai: FiZap,
+  rotate: FiRotateCw, flip: FiMaximize2, ai: FiZap, color: FiLayers, warp: FiMove, curves: FiActivity,
 };
 
 export default function EditTimeline({ past, future, currentIndex }) {
@@ -15,6 +15,12 @@ export default function EditTimeline({ past, future, currentIndex }) {
     if (edit.type === 'rotate') return edit.direction === 'cw' ? 'Rot →' : 'Rot ←';
     if (edit.type === 'smart-enhance' || /smart enhance/i.test(edit.description || '')) return '✨ Smart';
     if (edit.type === 'gradient' || /color grade/i.test(edit.description || '')) return '🎨 Grade';
+    if (edit.type === 'color' || /color balance/i.test(edit.description || '')) return '🎨 Color';
+    if (edit.type === 'curves' || /curves/i.test(edit.description || '')) return 'Curves';
+    if (edit.type === 'retouch' || /retouch/i.test(edit.description || '')) return '✨ Retouch';
+    if (edit.type === 'warp' || /mesh warp|perspective/i.test(edit.description || '')) return 'Warp';
+    if (edit.type === 'bokeh' || /bokeh/i.test(edit.description || '')) return '◍ Bokeh';
+    if (edit.type === 'motion' || /motion blur/i.test(edit.description || '')) return '≋ Motion';
     return 'Edit';
   };
 

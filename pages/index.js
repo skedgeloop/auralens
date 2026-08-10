@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   FiEye, FiLayers, FiZap, FiStar,
   FiSliders, FiFilter, FiZap as FiZapIcon,
-  FiCrop, FiImage,
+  FiCrop, FiImage, FiActivity,
 } from 'react-icons/fi';
 import UploadArea from '../src/components/UploadArea';
 import FilterControls from '../src/components/FilterControls';
@@ -10,17 +10,26 @@ import EditSuggestions from '../src/components/EditSuggestions';
 import AIPanel from '../src/components/AIPanel';
 import Toolbar from '../src/components/Toolbar';
 import ComparisonSlider from '../src/components/ComparisonSlider';
+import SelectionTool from '../src/components/SelectionTool';
 import AdjustmentPanel, { applyAdjustments } from '../src/components/AdjustmentPanel';
+import CurvesPanel from '../src/components/CurvesPanel';
+import ColorBalancePanel from '../src/components/ColorBalancePanel';
+import WarpPanel from '../src/components/WarpPanel';
+import BlurPanel from '../src/components/BlurPanel';
 import ExportDialog from '../src/components/ExportDialog';
 import EditTimeline from '../src/components/EditTimeline';
 import Toast from '../src/components/Toast';
 import {
   applyFilterToDataUrl, blendImages, FILTERS, FILTER_CATEGORIES,
   rotateImage, flipImage, getImageDimensions,
+  applyHSL, applyColorBalance, applyPerspective, applyMeshWarp,
+  applyBokehBlur, applyMotionBlur,
 } from '../src/lib/imageFilters';
+import { applyCurves, applyLevels } from '../src/lib/colorTools';
 import { analyzeImage, processNaturalLanguage } from '../src/lib/aiEngine';
 import { runTripleAnalysis } from '../src/lib/tripleAi';
 import { applyColorGrade, smartAutoEnhance } from '../src/lib/realAi';
+import { retouchPortrait } from '../src/lib/portrait';
 import useKeyboardShortcuts from '../src/hooks/useKeyboardShortcuts';
 
 
@@ -33,6 +42,7 @@ const FEATURES = [
 const SIDEBAR_TABS = [
   { key: 'ai', label: 'AI', icon: FiZapIcon },
   { key: 'adjust', label: 'Adjust', icon: FiSliders },
+  { key: 'curves', label: 'Curves', icon: FiActivity },
   { key: 'filter', label: 'Filters', icon: FiFilter },
 ];
 
@@ -239,6 +249,15 @@ export default function Home() {
     } catch (err) { console.error('Gradient failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
+  // ---- Selective selection (magic wand) — commits as a revertable step ----
+  const handleApplySelectionEffect = useCallback(async (result, description) => {
+    if (!result) return;
+    try {
+      pushSnapshot(result, description);
+      showToast(`Applied ${description}`, 'success');
+    } catch (err) { console.error('Selection edit failed:', err); }
+  }, [pushSnapshot, showToast]);
+
   // Live preview of color grade — updates the display instantly on drag
   // (no history push; only "apply" commits a step).
   const gradePreviewRef = useRef(null);
@@ -255,6 +274,103 @@ export default function Home() {
     gradePreviewRef.current = setTimeout(run, 60); // debounce drag
   }, [currentImage]);
 
+  // ---- Selective blur / bokeh — commits a revertable step on apply ----
+  const handleApplyBlur = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      const fn = opts?.type === 'motion' ? applyMotionBlur : applyBokehBlur;
+      const blurred = await fn(currentImage, opts);
+      pushSnapshot(blurred, opts?.type === 'motion' ? 'Motion blur' : 'Bokeh blur');
+      showToast(opts?.type === 'motion' ? 'Motion blur applied' : 'Bokeh blur applied', 'success');
+    } catch (err) { console.error('Blur failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
+
+  // Live preview of blur — updates the display instantly on drag
+  // (no history push; only "apply" commits a step).
+  const blurPreviewRef = useRef(null);
+  const handlePreviewBlur = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const fn = opts?.type === 'motion' ? applyMotionBlur : applyBokehBlur;
+        const blurred = await fn(base, opts);
+        setDisplayedImage(blurred);
+      } catch (err) { console.error('Blur preview failed:', err); }
+    };
+    clearTimeout(blurPreviewRef.current);
+    blurPreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage]);
+
+  // ---- Portrait retouch (skin, teeth, red-eye) — commits as a revertable step ----
+  const handleRetouchPortrait = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      const retouched = await retouchPortrait(currentImage, opts);
+      if (retouched !== currentImage) {
+        pushSnapshot(retouched, 'Portrait retouch');
+        showToast('Portrait retouched', 'success');
+      } else {
+        showToast('No retouch applied', 'info');
+      }
+    } catch (err) {
+      console.error('Retouch failed:', err);
+      showToast('Retouch failed', 'error');
+    }
+  }, [currentImage, pushSnapshot, showToast]);
+
+  // ---- Color balance & HSL — commits as a revertable step ----
+  const isNeutralColorBalance = (opts) => {
+    const h = opts?.hsl || {};
+    const hasHsl = (h.hue || 0) !== 0 || (h.saturation ?? 100) !== 100 || (h.lightness ?? 100) !== 100;
+    const hasBalance = Object.values(opts?.balance || {}).some(
+      (b) => (b?.c || 0) !== 0 || (b?.m || 0) !== 0 || (b?.y || 0) !== 0
+    );
+    return !hasHsl && !hasBalance;
+  };
+
+  const applyColorBalanceToImage = useCallback(async (src, opts) => {
+    let result = src;
+    result = await applyHSL(result, opts?.hsl || {});
+    result = await applyColorBalance(result, opts?.balance || {});
+    return result;
+  }, []);
+
+  const handleApplyColorBalance = useCallback(async (opts) => {
+    if (!currentImage || isNeutralColorBalance(opts)) return;
+    try {
+      const result = await applyColorBalanceToImage(currentImage, opts);
+      pushSnapshot(result, 'Color balance');
+      showToast('Color balance applied', 'success');
+    } catch (err) { console.error('Color balance failed:', err); }
+  }, [currentImage, applyColorBalanceToImage, pushSnapshot, showToast]);
+
+  // Live preview — updates display on drag, no history push.
+  const colorBalancePreviewRef = useRef(null);
+  const handlePreviewColorBalance = useCallback(async (opts) => {
+    if (!currentImage) return;
+    const base = currentImage;
+    const run = async () => {
+      try {
+        const result = await applyColorBalanceToImage(base, opts);
+        setDisplayedImage(result);
+      } catch (err) { console.error('Color balance preview failed:', err); }
+    };
+    clearTimeout(colorBalancePreviewRef.current);
+    colorBalancePreviewRef.current = setTimeout(run, 60); // debounce drag
+  }, [currentImage, applyColorBalanceToImage]);
+
+  // ---- Curves & Levels — commits as a revertable step ----
+  const handleApplyCurves = useCallback(async (opts) => {
+    if (!currentImage) return;
+    try {
+      let result = await applyCurves(currentImage, opts?.curves || {});
+      result = await applyLevels(result, opts?.levels || {});
+      pushSnapshot(result, 'Curves');
+      showToast('Curves applied', 'success');
+    } catch (err) { console.error('Curves failed:', err); }
+  }, [currentImage, pushSnapshot, showToast]);
+
   // ---- Transform ----
   const handleRotate = useCallback(async (degrees) => {
     if (!currentImage) return;
@@ -268,6 +384,19 @@ export default function Home() {
     const flipped = await flipImage(currentImage, direction);
     pushSnapshot(flipped, `Flip ${direction === 'h' ? 'horizontal' : 'vertical'}`);
     showToast(`Flipped ${direction === 'h' ? 'horizontally' : 'vertically'}`, 'success');
+  }, [currentImage, pushSnapshot, showToast]);
+
+  // ---- Perspective / mesh warp — commits as a revertable step ----
+  const handleApplyWarp = useCallback(async (opts) => {
+    if (!currentImage || !opts) return;
+    try {
+      const warped = opts.type === 'mesh'
+        ? await applyMeshWarp(currentImage, opts)
+        : await applyPerspective(currentImage, opts);
+      if (!warped || warped === currentImage) return;
+      pushSnapshot(warped, opts.type === 'mesh' ? 'Mesh warp' : 'Perspective');
+      showToast(opts.type === 'mesh' ? 'Mesh warp applied' : 'Perspective applied', 'success');
+    } catch (err) { console.error('Warp failed:', err); }
   }, [currentImage, pushSnapshot, showToast]);
 
   // ---- Zoom ----
@@ -409,6 +538,14 @@ export default function Home() {
                       originalSrc={originalImage}
                       editedSrc={displayedImage}
                       isComparing={isComparing}
+                    />
+
+                    {/* Magic wand / selective selection tool */}
+                    <SelectionTool
+                      imageSrc={currentImage}
+                      onApply={handleApplySelectionEffect}
+                      naturalWidth={imageDimensions.width}
+                      naturalHeight={imageDimensions.height}
                     />
 
                     {/* Analyzing overlay — full-screen blur + big pulsing circle */}
@@ -605,13 +742,33 @@ export default function Home() {
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto p-4">
               {activeTab === 'adjust' && (
-                <AdjustmentPanel
-                  onAdjust={handleAdjust}
-                  activeAdjustments={adjustments}
-                  onResetAll={handleAdjustResetAll}
-                  onApplyGradient={handleApplyGradient}
-                  onPreviewGrade={handlePreviewGrade}
-                  previewImage={currentImage}
+                <>
+                  <AdjustmentPanel
+                    onAdjust={handleAdjust}
+                    activeAdjustments={adjustments}
+                    onResetAll={handleAdjustResetAll}
+                    onApplyGradient={handleApplyGradient}
+                    onPreviewGrade={handlePreviewGrade}
+                    previewImage={currentImage}
+                  />
+                  <ColorBalancePanel
+                    onPreviewColorBalance={handlePreviewColorBalance}
+                    onApplyColorBalance={handleApplyColorBalance}
+                  />
+                  <WarpPanel
+                    previewImage={currentImage}
+                    onApplyWarp={handleApplyWarp}
+                  />
+                  <BlurPanel
+                    onApplyBlur={handleApplyBlur}
+                    onPreviewBlur={handlePreviewBlur}
+                  />
+                </>
+              )}
+
+              {activeTab === 'curves' && (
+                <CurvesPanel
+                  onApply={handleApplyCurves}
                 />
               )}
 
@@ -666,6 +823,7 @@ export default function Home() {
                     }
                   }}
                   onAnalysisComplete={(analysis) => setAiAnalysis(analysis)}
+                  onRetouchPortrait={handleRetouchPortrait}
                 />
               )}
             </div>
