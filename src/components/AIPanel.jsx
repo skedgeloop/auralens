@@ -4,40 +4,32 @@ import {
   FiArrowRight, FiCheck, FiLoader, FiMessageSquare, FiSmile,
 } from 'react-icons/fi';
 import { analyzeImage, processNaturalLanguage } from '../lib/aiEngine';
-import { runTripleAnalysis } from '../lib/tripleAi';
 import { applyBackgroundBlur, smartAutoEnhance } from '../lib/realAi';
 
 export default function AIPanel({
   imageSrc, onApplySuggestion, onAutoEnhance, onNaturalLanguage,
-  isAnalyzing, onAnalysisComplete,
+  isAnalyzing, onAnalysisComplete, tripleAi, aiTier,
 }) {
   const [analysis, setAnalysis] = useState(null);
-  const [tripleAi, setTripleAi] = useState(null);
   const [nlInput, setNlInput] = useState('');
   const [nlResult, setNlResult] = useState(null);
   const [appliedSuggestions, setAppliedSuggestions] = useState(new Set());
   const [activeSection, setActiveSection] = useState('all');
   const [blurLoading, setBlurLoading] = useState(false);
   const [enhanceLoading, setEnhanceLoading] = useState(false);
-  const [aiTier, setAiTier] = useState('loading');
 
   useEffect(() => {
-    if (!imageSrc) { setAnalysis(null); setTripleAi(null); return; }
+    if (!imageSrc) { setAnalysis(null); return; }
     let cancelled = false;
 
     (async () => {
-      const [imgAnalysis, tripleResult] = await Promise.allSettled([
-        analyzeImage(imageSrc),
-        runTripleAnalysis(imageSrc),
-      ]);
+      // Only client pixel analysis here — the AI (tripleAi) is computed once
+      // in index.js and passed down as a prop, so popup + panel agree.
+      const imgAnalysis = await analyzeImage(imageSrc);
 
       if (!cancelled) {
-        if (imgAnalysis.status === 'fulfilled') setAnalysis(imgAnalysis.value);
-        if (tripleResult.status === 'fulfilled') {
-          setTripleAi(tripleResult.value);
-          setAiTier(tripleResult.value.tier || 'pixel');
-        }
-        onAnalysisComplete?.(imgAnalysis.value);
+        if (imgAnalysis) setAnalysis(imgAnalysis);
+        onAnalysisComplete?.(imgAnalysis);
       }
     })();
 

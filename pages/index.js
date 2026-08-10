@@ -633,6 +633,8 @@ export default function Home() {
                 <AIPanel
                   imageSrc={currentImage}
                   isAnalyzing={isAnalyzing}
+                  tripleAi={tripleAi}
+                  aiTier={aiTier}
                   onApplySuggestion={(suggestion) => {
                     if (suggestion.type === 'adjustment' && suggestion.action) {
                       setAdjustments(prev => ({ ...prev, ...suggestion.action }));
