@@ -66,7 +66,10 @@ const UploadArea = ({ onImageUpload }) => {
               : 'border-[var(--border)] hover:border-[var(--text-dim)]'
             }`}
         >
-          <input {...getInputProps({ 'aria-label': 'Upload a photo' })} />
+          <label htmlFor="photo-upload" className="sr-only">
+            Upload a photo
+          </label>
+          <input {...getInputProps({ id: 'photo-upload', 'aria-label': 'Upload a photo' })} />
 
           {/* Upload icon */}
           <div className="mb-6">

@@ -97,6 +97,7 @@ const FilterControls = ({
           </div>
           <input
             type="range" min={0} max={100} value={filterIntensity}
+            aria-label="Intensity"
             onChange={(e) => onIntensityChange(Number(e.target.value))}
             className="slider"
             style={{

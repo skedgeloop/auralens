@@ -323,7 +323,7 @@ export default function Home() {
   const hasImage = !!originalImage;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <main className="h-screen flex flex-col overflow-hidden">
       {/* ===== Toolbar ===== */}
       {hasImage && (
         <Toolbar
@@ -505,7 +505,7 @@ export default function Home() {
                                   );
                                 })}
                                 {!tripleAi.face?.hasFace && (
-                                  <p className="text-[8px] text-white/30 mt-1">no face — showing defaults</p>
+                                  <p className="text-[8px] text-white/60 mt-1">no face — showing defaults</p>
                                 )}
                               </div>
 
@@ -558,7 +558,7 @@ export default function Home() {
 
                               {/* Summary */}
                               {tripleAi.summary && (
-                                <p className="text-[8px] text-white/30 leading-relaxed border-t border-white/5 pt-2">{tripleAi.summary}</p>
+                                <p className="text-[8px] text-white/60 leading-relaxed border-t border-white/5 pt-2">{tripleAi.summary}</p>
                               )}
                             </div>
                           )}
@@ -700,6 +700,6 @@ export default function Home() {
           onClose={() => setToast(null)}
         />
       )}
-    </div>
+    </main>
   );
 }

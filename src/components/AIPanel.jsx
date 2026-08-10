@@ -141,7 +141,7 @@ export default function AIPanel({
               <div className="flex items-center gap-2 mb-2">
                 <FiSmile className="w-3.5 h-3.5 text-[var(--pink)]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">face emotions</span>
-                <span className="text-[9px] text-[var(--text-dim)] opacity-50">server + face-api</span>
+                <span className="text-[9px] text-[var(--text-dim)]">server + face-api</span>
               </div>
 
               {tripleAi?.face?.hasFace ? (() => {
@@ -178,7 +178,7 @@ export default function AIPanel({
               <div className="flex items-center gap-2 mb-2">
                 <FiZap className="w-3.5 h-3.5 text-[var(--pink)]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">sassiness</span>
-                <span className="text-[9px] text-[var(--text-dim)] opacity-50">server + face-api</span>
+                <span className="text-[9px] text-[var(--text-dim)]">server + face-api</span>
               </div>
               {tripleAi?.face?.hasFace ? (
                 <div>
@@ -199,7 +199,7 @@ export default function AIPanel({
               <div className="flex items-center gap-2 mb-2">
                 <FiEye className="w-3.5 h-3.5 text-[var(--pink)]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">vibe / aura</span>
-                <span className="text-[9px] text-[var(--text-dim)] opacity-50">CLIP</span>
+                <span className="text-[9px] text-[var(--text-dim)]">CLIP</span>
               </div>
               {tripleAi?.vibe?.hasVibe ? (
                 <div>

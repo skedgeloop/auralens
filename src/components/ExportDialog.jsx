@@ -69,12 +69,13 @@ export default function ExportDialog({ isOpen, onClose, onExport, imageSrc, imag
         {format !== 'png' && (
           <div className="mb-5">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-dim)]">
+              <label htmlFor="export-quality" className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-dim)]">
                 quality
               </label>
               <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{quality}%</span>
             </div>
             <input
+              id="export-quality"
               type="range" min={10} max={100} value={quality}
               onChange={(e) => setQuality(Number(e.target.value))}
               className="slider"

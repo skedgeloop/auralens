@@ -110,6 +110,7 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             </div>
             <input
               type="range" min={adj.min} max={adj.max} value={val}
+              aria-label={adj.label}
               onChange={(e) => handleChange(adj.key, e.target.value)}
               className="slider"
               style={{
@@ -135,6 +136,7 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             </div>
             <input
               type="range" min={0} max={200} value={rgb[ch.key]}
+              aria-label={ch.label}
               onChange={(e) => { setRgb((p) => ({ ...p, [ch.key]: Number(e.target.value) })); previewGrade(); }}
               className="slider"
               style={{
@@ -150,11 +152,13 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] text-[var(--text-dim)]">shadows</span>
               <input type="color" value={shadowColor} onChange={(e) => { setShadowColor(e.target.value); previewGrade(); }}
+                aria-label="Shadows"
                 className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-[var(--text-dim)]">highlights</span>
               <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); previewGrade(); }}
+                aria-label="Highlights"
                 className="w-6 h-6 rounded cursor-pointer bg-transparent border-0" />
             </div>
           </div>
@@ -169,14 +173,14 @@ export default function AdjustmentPanel({ onAdjust, activeAdjustments, onResetAl
             <span className="text-[11px] text-[var(--text-dim)]">temperature</span>
             <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeTemp}</span>
           </div>
-          <input type="range" min={-100} max={100} value={gradeTemp} onChange={(e) => { setGradeTemp(Number(e.target.value)); previewGrade(); }} className="slider" />
+          <input type="range" min={-100} max={100} value={gradeTemp} aria-label="Temperature" onChange={(e) => { setGradeTemp(Number(e.target.value)); previewGrade(); }} className="slider" />
         </div>
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] text-[var(--text-dim)]">vibrance</span>
             <span className="text-[11px] text-[var(--text-dim)] tabular-nums font-mono">{gradeVib}</span>
           </div>
-          <input type="range" min={-100} max={100} value={gradeVib} onChange={(e) => { setGradeVib(Number(e.target.value)); previewGrade(); }} className="slider" />
+          <input type="range" min={-100} max={100} value={gradeVib} aria-label="Vibrance" onChange={(e) => { setGradeVib(Number(e.target.value)); previewGrade(); }} className="slider" />
         </div>
 
         <button onClick={handleApplyGrade} className="btn btn-pink w-full mt-4 py-2.5 text-xs">
