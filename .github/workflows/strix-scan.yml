@@ -1,26 +1,30 @@
-name: Strix AI Penetration Test
+name: Strix AI Penetration Test (Groq)
 
 on:
   pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+    types: [opened, synchronize, reopened]
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      pull-requests: write
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Required for diff-based scanning
+          fetch-depth: 0 # Required for Strix diff-scope checking on PRs
 
       - name: Install Strix
         run: curl -sSL https://strix.ai/install | bash
 
-      - name: Run Strix Security Scan
+      - name: Run Strix Security Scan with Groq
         env:
-          STRIX_LLM: ${{ secrets.STRIX_LLM }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          STRIX_LLM: "groq/llama-3.3-70b-versatile"
+          LLM_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           strix -n -t ./ --scan-mode quick
