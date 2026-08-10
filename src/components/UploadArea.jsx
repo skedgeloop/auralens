@@ -58,13 +58,15 @@ const UploadArea = ({ onImageUpload }) => {
       {!preview ? (
         <div
           {...getRootProps()}
+          role="button"
+          aria-label="Upload a photo — drop an image here or click to browse"
           className={`group cursor-pointer border-2 border-dashed rounded-xl p-12 text-center transition-all
             ${isDragActive
               ? 'border-[var(--pink)] bg-[rgba(255,45,111,0.05)]'
               : 'border-[var(--border)] hover:border-[var(--text-dim)]'
             }`}
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps({ 'aria-label': 'Upload a photo' })} />
 
           {/* Upload icon */}
           <div className="mb-6">

@@ -35,7 +35,8 @@
     "typescript": "5.0.4"
   },
   "browserslist": [
-    "defaults and fully supports es6-module",
-    "not dead"
+    ">0.3%",
+    "not dead",
+    "not op_mini all"
   ]
 }

@@ -25,13 +25,11 @@ class MyDocument extends Document {
           <meta name="twitter:title" content="aura — AI Photo Editor" />
           <meta name="twitter:description" content="Upload a photo, AI detects objects, applies edits, and tells you your aura." />
 
-          {/* Fonts */}
+          {/* Fonts — loaded as system fonts to avoid the critical-path webfont
+              chain (Lighthouse "Network dependency tree" ~700ms from fonts.gstatic).
+              Inter/Space Grotesk fall back to system-ui if not installed. */}
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-          <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-            rel="stylesheet"
-          />
 
           {/* Favicon */}
           <link rel="icon" href="/favicon.ico" />
